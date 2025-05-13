@@ -1,11 +1,12 @@
 [package]
 name = "color-thief"
 version = "0.2.2"
+edition = "2024"
 authors = ["Reizner Evgeniy <razrfalcon@gmail.com>"]
 keywords = ["graphics", "color"]
 categories = ["algorithms", "multimedia"]
 description = "Grabs the dominant color or a representative color palette from an image."
-repository = "https://github.com/RazrFalcon/color-thief-rs"
+repository = "https://github.com/walker84837/color-thief-rs"
 documentation = "https://docs.rs/color-thief/"
 readme = "README.md"
 license = "MIT"
