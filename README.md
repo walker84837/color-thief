@@ -22,6 +22,12 @@ test q1  ... bench:   1,429,800 ns/iter (+/- 21,987)
 test q10 ... bench:     854,297 ns/iter (+/- 25,468)
 ```
 
+### Roadmap
+
+- [ ] Implement multiple algorithms to extract colors
+- [ ] Create palette using color spaces
+- [ ] Make library use generic types for convenience
+
 ### Usage
 
 Dependency: [Rust](https://www.rust-lang.org/) >= 1.13
