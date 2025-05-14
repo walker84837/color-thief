@@ -12,6 +12,7 @@ readme = "README.md"
 license = "MIT"
 
 [dependencies]
+rand = "0.9.1"
 rgb = "0.8"
 
 [dev-dependencies]
