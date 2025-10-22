@@ -2,7 +2,7 @@
 name = "color-thief"
 version = "0.2.2"
 edition = "2024"
-authors = ["Reizner Evgeniy <razrfalcon@gmail.com>"]
+authors = ["Reizner Evgeniy <razrfalcon@gmail.com>", "walker84837 <walker84837@gmail.com>"]
 keywords = ["graphics", "color"]
 categories = ["algorithms", "multimedia"]
 description = "Grabs the dominant color or a representative color palette from an image."
@@ -10,6 +10,7 @@ repository = "https://github.com/walker84837/color-thief-rs"
 documentation = "https://docs.rs/color-thief/"
 readme = "README.md"
 license = "MIT"
+rust-version = "1.85.1"
 
 [dependencies]
 rand = "0.9.1"
