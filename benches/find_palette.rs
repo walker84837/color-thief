@@ -1,13 +1,13 @@
 #[macro_use]
 extern crate bencher;
-extern crate image;
 extern crate color_thief;
+extern crate image;
 
 use std::path::Path;
 
 use bencher::Bencher;
 
-use color_thief::ColorFormat;
+use color_thief::{Algorithm, ColorFormat};
 
 fn get_image_buffer(img: image::DynamicImage) -> Vec<u8> {
     match img {
@@ -19,14 +19,26 @@ fn get_image_buffer(img: image::DynamicImage) -> Vec<u8> {
 fn q1(bencher: &mut Bencher) {
     let img = image::open(&Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
-    bencher.iter(|| color_thief::get_palette(&pixels, ColorFormat::Rgb, 1, 10))
+    bencher.iter(|| color_thief::get_palette(Algorithm::Mmcq, &pixels, ColorFormat::Rgb, 1, 10))
 }
 
 fn q10(bencher: &mut Bencher) {
     let img = image::open(&Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
-    bencher.iter(|| color_thief::get_palette(&pixels, ColorFormat::Rgb, 10, 10))
+    bencher.iter(|| color_thief::get_palette(Algorithm::Mmcq, &pixels, ColorFormat::Rgb, 10, 10))
 }
 
-benchmark_group!(benches, q1, q10);
+fn q1_kmeans(bencher: &mut Bencher) {
+    let img = image::open(&Path::new("images/photo1.jpg")).unwrap();
+    let pixels = get_image_buffer(img);
+    bencher.iter(|| color_thief::get_palette(Algorithm::KMeans, &pixels, ColorFormat::Rgb, 1, 10))
+}
+
+fn q10_kmeans(bencher: &mut Bencher) {
+    let img = image::open(&Path::new("images/photo1.jpg")).unwrap();
+    let pixels = get_image_buffer(img);
+    bencher.iter(|| color_thief::get_palette(Algorithm::KMeans, &pixels, ColorFormat::Rgb, 10, 10))
+}
+
+benchmark_group!(benches, q1, q10, q1_kmeans, q10_kmeans);
 benchmark_main!(benches);
