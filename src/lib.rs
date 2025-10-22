@@ -32,24 +32,45 @@ const MAX_ITERATIONS: i32 = 1000;
 /// Choice of algorithm for color palette generation.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Algorithm {
-    /// Original MMCQ (Modified Median Cut Quantization) algorithm.
+    /// Original MMCQ (Modified Median Cut Quantization) algorithm. This algorithm was used in the original code of `color-thief-rs`.
+    ///
+    /// *Summary*: Fast, distinct colors, less accurate.
+    ///
+    /// This algorithm works by recursively dividing the color space into smaller boxes (vboxes)
+    /// until the desired number of colors is reached. It's generally faster and effective for
+    /// reducing the number of colors while preserving visual quality, especially for images
+    /// with distinct color regions. It might be less accurate for images with subtle color gradients.
     Mmcq,
-    /// K-means clustering algorithm.
+    /// K-means clustering algorithm. This algorithm was added in the fork.
+    ///
+    /// *Summary*: Slower, subtle gradients, more accurate.
+    ///
+    /// K-means is an iterative algorithm that partitions `n` observations into `k` clusters,
+    /// where each observation belongs to the cluster with the nearest mean (centroid). In the
+    /// context of color quantization, it groups similar colors together to form the palette.
+    /// K-means can sometimes produce more perceptually uniform palettes than MMCQ, making it
+    /// more accurate for images with subtle color variations, but it can also be slower and
+    /// more sensitive to the initial choice of centroids.
     KMeans,
 }
 
 /// Represent a color format of an underlying image data.
-#[allow(missing_docs)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ColorFormat {
+    /// Red, Green, Blue color format.
     Rgb,
+    /// Red, Green, Blue, Alpha color format.
     Rgba,
+    /// Alpha, Red, Green, Blue color format.
     Argb,
+    /// Blue, Green, Red color format.
     Bgr,
+    /// Blue, Green, Red, Alpha color format.
     Bgra,
 }
 
 impl ColorFormat {
+    /// Returns the number of channels in a color format.
     fn channels(&self) -> usize {
         match self {
             ColorFormat::Rgb => 3,
@@ -62,10 +83,16 @@ impl ColorFormat {
 }
 
 /// List of all errors.
-#[allow(missing_docs)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Error {
+    /// An invalid VBox was encountered. This can happen if:
+    /// - a VBox (a representation of a color range) contains no pixels after filtering;
+    /// - if the input parameters lead to an impossible VBox state, such as requesting 0 colors for the palette.
     InvalidVBox,
+    /// Failed to cut a VBox. This occurs when:
+    /// - the algorithm attempts to divide a VBox into two smaller VBoxes but cannot find a suitable split point;
+    /// - the VBox contains only a single color, a very small range of colors;
+    /// - if the pixel distribution within it prevents a meaningful division.
     VBoxCutFailed,
 }
 
