@@ -15,6 +15,7 @@ rust-version = "1.85.1"
 [dependencies]
 rand = "0.9.1"
 rgb = "0.8"
+thiserror = "1.0"
 
 [dev-dependencies]
 bencher = "0.1"
