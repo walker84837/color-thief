@@ -1,5 +1,6 @@
 use super::{Color, ColorFormat, PaletteGenerator};
 use rand::prelude::*;
+use rayon::prelude::*;
 use std::collections::HashSet;
 use thiserror::Error;
 
@@ -104,29 +105,36 @@ fn initialize_centroids(samples: &[Color], k: usize) -> Vec<Color> {
 }
 
 fn assign_clusters(samples: &[Color], centroids: &[Color], assignments: &mut [usize]) -> bool {
-    let mut changed = false;
-    for (i, sample) in samples.iter().enumerate() {
-        let mut min_dist = f64::INFINITY;
-        let mut best_cluster = 0;
-        for (cluster_idx, centroid) in centroids.iter().enumerate() {
-            let dist = color_distance(sample, centroid);
-            if dist < min_dist {
-                min_dist = dist;
-                best_cluster = cluster_idx;
+    let new_assignments: Vec<usize> = samples
+        .par_iter()
+        .map(|sample| {
+            let mut min_dist = f32::INFINITY;
+            let mut best_cluster = 0;
+            for (cluster_idx, centroid) in centroids.iter().enumerate() {
+                let dist = color_distance(sample, centroid);
+                if dist < min_dist {
+                    min_dist = dist;
+                    best_cluster = cluster_idx;
+                }
             }
-        }
-        if assignments[i] != best_cluster {
-            assignments[i] = best_cluster;
+            best_cluster
+        })
+        .collect();
+
+    let mut changed = false;
+    for (i, &new_assignment) in new_assignments.iter().enumerate() {
+        if assignments[i] != new_assignment {
+            assignments[i] = new_assignment;
             changed = true;
         }
     }
     changed
 }
 
-fn color_distance(c1: &Color, c2: &Color) -> f64 {
-    let dr = c1.r as f64 - c2.r as f64;
-    let dg = c1.g as f64 - c2.g as f64;
-    let db = c1.b as f64 - c2.b as f64;
+fn color_distance(c1: &Color, c2: &Color) -> f32 {
+    let dr = c1.r as f32 - c2.r as f32;
+    let dg = c1.g as f32 - c2.g as f32;
+    let db = c1.b as f32 - c2.b as f32;
     dr * dr + dg * dg + db * db
 }
 
@@ -140,9 +148,9 @@ fn update_centroids(
     let mut counts = vec![0; k];
 
     for (sample, &cluster) in samples.iter().zip(assignments) {
-        sums[cluster].0 += sample.r as f64;
-        sums[cluster].1 += sample.g as f64;
-        sums[cluster].2 += sample.b as f64;
+        sums[cluster].0 += sample.r as f32;
+        sums[cluster].1 += sample.g as f32;
+        sums[cluster].2 += sample.b as f32;
         counts[cluster] += 1;
     }
 
@@ -155,9 +163,9 @@ fn update_centroids(
                 new_centroids.push(Color::new(0, 0, 0));
             }
         } else {
-            let r = (sums[i].0 / counts[i] as f64).round() as u8;
-            let g = (sums[i].1 / counts[i] as f64).round() as u8;
-            let b = (sums[i].2 / counts[i] as f64).round() as u8;
+            let r = (sums[i].0 / counts[i] as f32).round() as u8;
+            let g = (sums[i].1 / counts[i] as f32).round() as u8;
+            let b = (sums[i].2 / counts[i] as f32).round() as u8;
             new_centroids.push(Color::new(r, g, b));
         }
     }
