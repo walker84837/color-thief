@@ -27,7 +27,10 @@ impl PaletteGenerator for KMeans {
         let colors_count = color_format.channels();
         let step = quality as usize;
 
-        let mut samples = Vec::new();
+        // Estimate final length of `samples` from the for loop
+        let estimated_capacity = pixels.len() / (colors_count * step);
+        let mut samples = Vec::with_capacity(estimated_capacity);
+
         for i in (0..pixels.len()).step_by(colors_count * step) {
             if i + colors_count > pixels.len() {
                 break;
@@ -47,7 +50,7 @@ impl PaletteGenerator for KMeans {
         let max_iter = 100;
         let centroids = kmeans(&samples, k, max_iter);
 
-        let mut seen = HashSet::new();
+        let mut seen = HashSet::with_capacity(k);
         let mut unique_centroids = Vec::with_capacity(centroids.len());
         for color in centroids {
             if seen.insert(color) {
@@ -86,7 +89,7 @@ fn initialize_centroids(samples: &[Color], k: usize) -> Vec<Color> {
         centroids.push(samples[i]);
     }
 
-    let mut unique = HashSet::new();
+    let mut unique = HashSet::with_capacity(k);
     for color in &centroids {
         unique.insert(*color);
     }
