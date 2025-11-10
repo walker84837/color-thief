@@ -1,5 +1,5 @@
 use super::{
-    Color, ColorFormat, FRACTION_BY_POPULATION, HISTOGRAM_SIZE, MAX_ITERATIONS, MULTIPLIER,
+    Color, ColorFormat, FRACTION_BY_POPULATION, HISTOGRAM_SIZE, MMCQ_ITERATION_LIMIT, MULTIPLIER,
     MULTIPLIER_64, PaletteGenerator, RIGHT_SHIFT, SIGNAL_BITS, VBOX_LENGTH,
 };
 
@@ -394,7 +394,7 @@ where
     P: FnMut(&VBox, &VBox) -> cmp::Ordering + Copy,
 {
     let mut color = 1;
-    for _ in 0..MAX_ITERATIONS {
+    for _ in 0..MMCQ_ITERATION_LIMIT {
         if let Some(mut vbox) = queue.pop() {
             if vbox.count == 0 {
                 queue.sort_by(comparator);

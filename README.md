@@ -57,7 +57,7 @@ To migrate, you must now specify the algorithm to use. For the original behavior
 
 * **K-Means algorithm**: A new `Algorithm` enum has been introduced, allowing you to choose between `Mmcq` (the original Modified Median Cut Quantization algorithm) and `KMeans` (K-means clustering algorithm).
   * `Algorithm::Mmcq`: Fast, distinct colors, less accurate for subtle gradients.
-  * `Algorithm::KMeans`: Slower, better for subtle gradients, more accurate overall.
+  * `Algorithm::KMeans { max_iterations: usize }`: Slower, better for subtle gradients, more accurate overall. The `max_iterations` field allows you to specify the maximum number of iterations for the K-Means algorithm to run.
 * **Expanded `ColorFormat`**: The `ColorFormat` enum now supports more formats: `Rgb`, `Rgba`, `Argb`, `Bgr`, `Bgra`.
 * **Improved error handling**: The `Error` enum now provides more descriptive error messages.
 
@@ -78,7 +78,16 @@ use color_thief::Algorithm;
 let colors_mmcq = color_thief::get_palette(Algorithm::Mmcq, &buffer, color_type, 10, 10).unwrap();
 
 // For the new K-Means algorithm
-let colors_kmeans = color_thief::get_palette(Algorithm::KMeans, &buffer, color_type, 10, 10).unwrap();
+let colors_kmeans = color_thief::get_palette(
+    Algorithm::KMeans {
+        max_iterations: 100,
+    },
+    &buffer,
+    color_type,
+    10,
+    10,
+)
+.unwrap();
 ```
 
 ### Roadmap

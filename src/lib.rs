@@ -29,7 +29,7 @@ const MULTIPLIER_64: f64 = MULTIPLIER as f64;
 const HISTOGRAM_SIZE: usize = 1 << (3 * SIGNAL_BITS);
 const VBOX_LENGTH: usize = 1 << SIGNAL_BITS;
 const FRACTION_BY_POPULATION: f64 = 0.75;
-const MAX_ITERATIONS: i32 = 1000;
+const MMCQ_ITERATION_LIMIT: i32 = 1000;
 
 /// Choice of algorithm for color palette generation.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -53,7 +53,10 @@ pub enum Algorithm {
     /// K-means can sometimes produce more perceptually uniform palettes than MMCQ, making it
     /// more accurate for images with subtle color variations, but it can also be slower and
     /// more sensitive to the initial choice of centroids.
-    KMeans,
+    KMeans {
+        /// The maximum number of iterations for the K-Means algorithm to run.
+        max_iterations: usize,
+    },
 }
 
 /// Represent a color format of an underlying image data.
@@ -150,9 +153,12 @@ pub fn get_palette(
         Algorithm::Mmcq => mmcq::Mmcq
             .generate_palette(pixels, color_format, quality, max_colors)
             .map_err(Error::Mmcq),
-        Algorithm::KMeans => kmeans::KMeans
-            .generate_palette(pixels, color_format, quality, max_colors)
-            .map_err(Error::KMeans),
+        Algorithm::KMeans { max_iterations } => {
+            let kmeans = kmeans::KMeans { max_iterations };
+            kmeans
+                .generate_palette(pixels, color_format, quality, max_colors)
+                .map_err(Error::KMeans)
+        }
     }
 }
 

@@ -44,7 +44,16 @@ fn image1_mmcq() {
 fn image1_kmeans() {
     let img = image::open(&path::Path::new("images/photo1.jpg")).unwrap();
     let (buffer, color_type) = get_image_buffer(img);
-    let colors = color_thief::get_palette(Algorithm::KMeans, &buffer, color_type, 10, 10).unwrap();
+    let colors = color_thief::get_palette(
+        Algorithm::KMeans {
+            max_iterations: 100,
+        },
+        &buffer,
+        color_type,
+        10,
+        10,
+    )
+    .unwrap();
 
     // Verify color clusters exist in expected ranges
     assert!(colors.iter().any(|c| c.r < 60 && c.g < 50 && c.b < 40)); // Dark colors
@@ -68,7 +77,16 @@ fn image2_mmcq() {
 fn image2_kmeans() {
     let img = image::open(&path::Path::new("images/iguana.png")).unwrap();
     let (buffer, color_type) = get_image_buffer(img);
-    let colors = color_thief::get_palette(Algorithm::KMeans, &buffer, color_type, 10, 10).unwrap();
+    let colors = color_thief::get_palette(
+        Algorithm::KMeans {
+            max_iterations: 100,
+        },
+        &buffer,
+        color_type,
+        10,
+        10,
+    )
+    .unwrap();
 
     // Verify key color groups exist
     assert!(colors.iter().any(|c| c.r > 200 && c.g > 200)); // White/gray

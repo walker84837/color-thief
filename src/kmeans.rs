@@ -4,7 +4,9 @@ use rayon::prelude::*;
 use std::collections::HashSet;
 use thiserror::Error;
 
-pub struct KMeans;
+pub struct KMeans {
+    pub max_iterations: usize,
+}
 
 /// Represents an error that can occur during the K-Means algorithm.
 #[derive(Debug, Error)]
@@ -47,8 +49,7 @@ impl PaletteGenerator for KMeans {
 
         let k = max_colors as usize;
 
-        let max_iter = 100;
-        let centroids = kmeans(&samples, k, max_iter);
+        let centroids = kmeans(&samples, k, self.max_iterations);
 
         let mut seen = HashSet::with_capacity(k);
         let mut unique_centroids = Vec::with_capacity(centroids.len());

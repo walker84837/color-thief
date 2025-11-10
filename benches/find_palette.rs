@@ -31,13 +31,33 @@ fn q10(bencher: &mut Bencher) {
 fn q1_kmeans(bencher: &mut Bencher) {
     let img = image::open(&Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
-    bencher.iter(|| color_thief::get_palette(Algorithm::KMeans, &pixels, ColorFormat::Rgb, 1, 10))
+    bencher.iter(|| {
+        color_thief::get_palette(
+            Algorithm::KMeans {
+                max_iterations: 100,
+            },
+            &pixels,
+            ColorFormat::Rgb,
+            1,
+            10,
+        )
+    })
 }
 
 fn q10_kmeans(bencher: &mut Bencher) {
     let img = image::open(&Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
-    bencher.iter(|| color_thief::get_palette(Algorithm::KMeans, &pixels, ColorFormat::Rgb, 10, 10))
+    bencher.iter(|| {
+        color_thief::get_palette(
+            Algorithm::KMeans {
+                max_iterations: 100,
+            },
+            &pixels,
+            ColorFormat::Rgb,
+            10,
+            10,
+        )
+    })
 }
 
 benchmark_group!(benches, q1, q10, q1_kmeans, q10_kmeans);
