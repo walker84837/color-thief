@@ -64,8 +64,22 @@ impl PaletteGenerator for KMeans {
 }
 
 fn kmeans(samples: &[Color], k: usize, max_iter: usize) -> Vec<Color> {
+    if samples.is_empty() {
+        return Vec::new();
+    }
+
+    // clamp k to sample count
+    let k = k.min(samples.len());
+
     let mut centroids = initialize_centroids(samples, k);
-    let mut assignments = vec![0; samples.len()];
+    let mut assignments = vec![usize::MAX; samples.len()];
+
+    // preallocate buffers for update_centroids and reuse each iteration
+    let mut sums_r = vec![0u64; k];
+    let mut sums_g = vec![0u64; k];
+    let mut sums_b = vec![0u64; k];
+    let mut counts = vec![0usize; k];
+
     let mut rng = rand::rng();
 
     for _ in 0..max_iter {
@@ -73,7 +87,16 @@ fn kmeans(samples: &[Color], k: usize, max_iter: usize) -> Vec<Color> {
         if !changed {
             break;
         }
-        centroids = update_centroids(samples, &assignments, k, &mut rng);
+        centroids = update_centroids(
+            samples,
+            &assignments,
+            k,
+            &mut rng,
+            &mut sums_r,
+            &mut sums_g,
+            &mut sums_b,
+            &mut counts,
+        );
     }
 
     centroids
@@ -81,25 +104,29 @@ fn kmeans(samples: &[Color], k: usize, max_iter: usize) -> Vec<Color> {
 
 fn initialize_centroids(samples: &[Color], k: usize) -> Vec<Color> {
     let mut rng = rand::rng();
-    let mut centroids = Vec::with_capacity(k);
-    let mut indices: Vec<usize> = (0..samples.len()).collect();
-    indices.shuffle(&mut rng);
+    let k_eff = k.min(samples.len());
+    let mut centroids: Vec<Color> = samples.choose_multiple(&mut rng, k_eff).cloned().collect();
 
-    for &i in indices.iter().take(k) {
-        centroids.push(samples[i]);
-    }
-
-    let mut unique = HashSet::with_capacity(k);
-    for color in &centroids {
-        unique.insert(*color);
-    }
-    while unique.len() < k {
-        if let Some(&sample) = samples.choose(&mut rng) {
-            if unique.insert(sample) {
-                centroids.push(sample);
+    // If k > samples.len() (shouldn't happen often) fill up with random choices
+    // but ensure uniqueness until we either reach k or run out of unique samples.
+    if centroids.len() < k {
+        let mut seen = std::collections::HashSet::with_capacity(k);
+        for &c in &centroids {
+            seen.insert(c);
+        }
+        while centroids.len() < k {
+            if let Some(&s) = samples.choose(&mut rng) {
+                if seen.insert(s) {
+                    centroids.push(s);
+                } else {
+                    // if we can't find new unique quickly, break to avoid infinite loop
+                    if seen.len() == samples.len() {
+                        break;
+                    }
+                }
+            } else {
+                break;
             }
-        } else {
-            break;
         }
     }
 
@@ -146,33 +173,48 @@ fn update_centroids(
     assignments: &[usize],
     k: usize,
     rng: &mut ThreadRng,
+    sums_r: &mut [u64],
+    sums_g: &mut [u64],
+    sums_b: &mut [u64],
+    counts: &mut [usize],
 ) -> Vec<Color> {
-    let mut sums = vec![(0.0, 0.0, 0.0); k];
-    let mut counts = vec![0; k];
+    debug_assert_eq!(sums_r.len(), k);
+    debug_assert_eq!(sums_g.len(), k);
+    debug_assert_eq!(sums_b.len(), k);
+    debug_assert_eq!(counts.len(), k);
 
-    for (sample, &cluster) in samples.iter().zip(assignments) {
-        sums[cluster].0 += sample.r as f32;
-        sums[cluster].1 += sample.g as f32;
-        sums[cluster].2 += sample.b as f32;
+    // clear accumulators
+    for i in 0..k {
+        sums_r[i] = 0;
+        sums_g[i] = 0;
+        sums_b[i] = 0;
+        counts[i] = 0;
+    }
+
+    for (s, &cluster) in samples.iter().zip(assignments.iter()) {
         counts[cluster] += 1;
+        sums_r[cluster] += s.r as u64;
+        sums_g[cluster] += s.g as u64;
+        sums_b[cluster] += s.b as u64;
     }
 
     let mut new_centroids = Vec::with_capacity(k);
     for i in 0..k {
         if counts[i] == 0 {
-            if let Some(&sample) = samples.choose(rng) {
-                new_centroids.push(sample);
+            // replace empty cluster with a random sample
+            if let Some(&s) = samples.choose(rng) {
+                new_centroids.push(s);
             } else {
                 new_centroids.push(Color::new(0, 0, 0));
             }
         } else {
-            let r = (sums[i].0 / counts[i] as f32).round() as u8;
-            let g = (sums[i].1 / counts[i] as f32).round() as u8;
-            let b = (sums[i].2 / counts[i] as f32).round() as u8;
+            // integer average with rounding
+            let r = ((sums_r[i] + (counts[i] as u64 / 2)) / counts[i] as u64) as u8;
+            let g = ((sums_g[i] + (counts[i] as u64 / 2)) / counts[i] as u64) as u8;
+            let b = ((sums_b[i] + (counts[i] as u64 / 2)) / counts[i] as u64) as u8;
             new_centroids.push(Color::new(r, g, b));
         }
     }
-
     new_centroids
 }
 
