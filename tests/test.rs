@@ -47,6 +47,7 @@ fn image1_kmeans() {
     let colors = color_thief::get_palette(
         Algorithm::KMeans {
             max_iterations: 100,
+            seed: Some(0),
         },
         &buffer,
         color_type,
@@ -80,6 +81,7 @@ fn image2_kmeans() {
     let colors = color_thief::get_palette(
         Algorithm::KMeans {
             max_iterations: 100,
+            seed: Some(0),
         },
         &buffer,
         color_type,

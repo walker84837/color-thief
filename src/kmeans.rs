@@ -1,11 +1,12 @@
 use super::{Color, ColorFormat, PaletteGenerator};
-use rand::prelude::*;
+use rand::{SeedableRng, prelude::*, rand_core::RngCore, rngs::StdRng};
 use rayon::prelude::*;
 use std::collections::HashSet;
 use thiserror::Error;
 
 pub struct KMeans {
     pub max_iterations: usize,
+    pub seed: Option<u64>,
 }
 
 /// Represents an error that can occur during the K-Means algorithm.
@@ -49,7 +50,7 @@ impl PaletteGenerator for KMeans {
 
         let k = max_colors as usize;
 
-        let centroids = kmeans(&samples, k, self.max_iterations);
+        let centroids = kmeans(&samples, k, self.max_iterations, self.seed);
 
         let mut seen = HashSet::with_capacity(k);
         let mut unique_centroids = Vec::with_capacity(centroids.len());
@@ -64,7 +65,7 @@ impl PaletteGenerator for KMeans {
     }
 }
 
-fn kmeans(samples: &[Color], k: usize, max_iter: usize) -> Vec<Color> {
+fn kmeans(samples: &[Color], k: usize, max_iter: usize, seed: Option<u64>) -> Vec<Color> {
     if samples.is_empty() {
         return Vec::new();
     }
@@ -72,7 +73,12 @@ fn kmeans(samples: &[Color], k: usize, max_iter: usize) -> Vec<Color> {
     // clamp k to sample count
     let k = k.min(samples.len());
 
-    let mut centroids = initialize_centroids(samples, k);
+    let mut rng: Box<dyn RngCore> = match seed {
+        Some(s) => Box::new(StdRng::seed_from_u64(s)),
+        None => Box::new(rand::rng()),
+    };
+
+    let mut centroids = initialize_centroids(samples, k, &mut rng);
     let mut assignments = vec![usize::MAX; samples.len()];
 
     // preallocate buffers for update_centroids and reuse each iteration
@@ -80,8 +86,6 @@ fn kmeans(samples: &[Color], k: usize, max_iter: usize) -> Vec<Color> {
     let mut sums_g = vec![0u64; k];
     let mut sums_b = vec![0u64; k];
     let mut counts = vec![0usize; k];
-
-    let mut rng = rand::rng();
 
     for _ in 0..max_iter {
         let changed = assign_clusters(samples, &centroids, &mut assignments);
@@ -103,10 +107,9 @@ fn kmeans(samples: &[Color], k: usize, max_iter: usize) -> Vec<Color> {
     centroids
 }
 
-fn initialize_centroids(samples: &[Color], k: usize) -> Vec<Color> {
-    let mut rng = rand::rng();
+fn initialize_centroids(samples: &[Color], k: usize, rng: &mut dyn RngCore) -> Vec<Color> {
     let k_eff = k.min(samples.len());
-    let mut centroids: Vec<Color> = samples.choose_multiple(&mut rng, k_eff).cloned().collect();
+    let mut centroids: Vec<Color> = samples.choose_multiple(rng, k_eff).cloned().collect();
 
     // If k > samples.len() (shouldn't happen often) fill up with random choices
     // but ensure uniqueness until we either reach k or run out of unique samples.
@@ -116,7 +119,7 @@ fn initialize_centroids(samples: &[Color], k: usize) -> Vec<Color> {
             seen.insert(c);
         }
         while centroids.len() < k {
-            if let Some(&s) = samples.choose(&mut rng) {
+            if let Some(&s) = samples.choose(rng) {
                 if seen.insert(s) {
                     centroids.push(s);
                 } else {
@@ -173,7 +176,7 @@ fn update_centroids(
     samples: &[Color],
     assignments: &[usize],
     k: usize,
-    rng: &mut ThreadRng,
+    rng: &mut dyn RngCore,
     sums_r: &mut [u64],
     sums_g: &mut [u64],
     sums_b: &mut [u64],

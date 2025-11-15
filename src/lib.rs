@@ -56,6 +56,8 @@ pub enum Algorithm {
     KMeans {
         /// The maximum number of iterations for the K-Means algorithm to run.
         max_iterations: usize,
+        /// An optional seed for the random number generator, allowing for reproducible results.
+        seed: Option<u64>,
     },
 }
 
@@ -153,8 +155,14 @@ pub fn get_palette(
         Algorithm::Mmcq => mmcq::Mmcq
             .generate_palette(pixels, color_format, quality, max_colors)
             .map_err(Error::Mmcq),
-        Algorithm::KMeans { max_iterations } => {
-            let kmeans = kmeans::KMeans { max_iterations };
+        Algorithm::KMeans {
+            max_iterations,
+            seed,
+        } => {
+            let kmeans = kmeans::KMeans {
+                max_iterations,
+                seed,
+            };
             kmeans
                 .generate_palette(pixels, color_format, quality, max_colors)
                 .map_err(Error::KMeans)
