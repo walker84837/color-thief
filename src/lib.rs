@@ -5,8 +5,14 @@
 //! *color-thief-rs* is a [color-thief](https://github.com/lokesh/color-thief)
 //! algorithm reimplementation in Rust.
 //!
-//! The implementation itself is a heavily modified
-//! [Swift version](https://github.com/yamoridon/ColorThiefSwift) of the same algorithm.
+//! The implementation is a fork of the original [color-thief-rs](https://github.com/RazrFalcon/color-thief-rs)
+//! which adds a few algorithms.
+//!
+//! This fork improves on the library's algorithms (MMCQ is the original algorithm used), including:
+//! - Ability to choose another algorithm for color palette generation.
+//! - ... more to come!
+//!
+//! For now, it adds K-Means (while keeping it as fast as possible) along with MMCQ, but other algorithms are planned.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -14,10 +20,10 @@
 mod kmeans;
 mod mmcq;
 
+use kmeans::KMeans as KMeansImpl;
 use std::str::FromStr;
 use thiserror::Error;
 
-use kmeans::KMeansError;
 use mmcq::MmcqError;
 
 pub use rgb::RGB8 as Color;
@@ -62,7 +68,7 @@ pub enum Algorithm {
 }
 
 /// Represent a color format of an underlying image data.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum ColorFormat {
     /// Red, Green, Blue color format.
     Rgb,
@@ -102,7 +108,7 @@ pub enum Error {
     Mmcq(#[from] MmcqError),
     /// An error occurred in the K-Means algorithm.
     #[error(transparent)]
-    KMeans(#[from] KMeansError),
+    KMeans(#[from] kmeans::KMeansError),
 }
 
 /// Represents an error for invalid input when parsing a color format
@@ -155,11 +161,12 @@ pub fn get_palette(
         Algorithm::Mmcq => mmcq::Mmcq
             .generate_palette(pixels, color_format, quality, max_colors)
             .map_err(Error::Mmcq),
+
         Algorithm::KMeans {
             max_iterations,
             seed,
         } => {
-            let kmeans = kmeans::KMeans {
+            let kmeans = KMeansImpl {
                 max_iterations,
                 seed,
             };

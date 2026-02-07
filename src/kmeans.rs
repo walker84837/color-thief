@@ -1,5 +1,5 @@
 use super::{Color, ColorFormat, PaletteGenerator};
-use rand::{SeedableRng, prelude::*, rand_core::RngCore, rngs::StdRng};
+use rand::{SeedableRng, prelude::*, rngs::StdRng};
 use rayon::prelude::*;
 use std::collections::HashSet;
 use thiserror::Error;
@@ -114,7 +114,7 @@ fn initialize_centroids(samples: &[Color], k: usize, rng: &mut dyn RngCore) -> V
     // If k > samples.len() (shouldn't happen often) fill up with random choices
     // but ensure uniqueness until we either reach k or run out of unique samples.
     if centroids.len() < k {
-        let mut seen = std::collections::HashSet::with_capacity(k);
+        let mut seen = HashSet::with_capacity(k);
         for &c in &centroids {
             seen.insert(c);
         }
@@ -142,7 +142,7 @@ fn assign_clusters(samples: &[Color], centroids: &[Color], assignments: &mut [us
     let new_assignments: Vec<usize> = samples
         .par_iter()
         .map(|sample| {
-            let mut min_dist = f32::INFINITY;
+            let mut min_dist = u32::MAX;
             let mut best_cluster = 0;
             for (cluster_idx, centroid) in centroids.iter().enumerate() {
                 let dist = color_distance(sample, centroid);
@@ -162,13 +162,15 @@ fn assign_clusters(samples: &[Color], centroids: &[Color], assignments: &mut [us
             changed = true;
         }
     }
+
     changed
 }
 
-fn color_distance(c1: &Color, c2: &Color) -> f32 {
-    let dr = c1.r as f32 - c2.r as f32;
-    let dg = c1.g as f32 - c2.g as f32;
-    let db = c1.b as f32 - c2.b as f32;
+#[inline]
+fn color_distance(c1: &Color, c2: &Color) -> u32 {
+    let dr = c1.r.abs_diff(c2.r) as u32;
+    let dg = c1.g.abs_diff(c2.g) as u32;
+    let db = c1.b.abs_diff(c2.b) as u32;
     dr * dr + dg * dg + db * db
 }
 

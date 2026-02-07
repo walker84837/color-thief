@@ -35,6 +35,7 @@ fn q1_kmeans(bencher: &mut Bencher) {
         color_thief::get_palette(
             Algorithm::KMeans {
                 max_iterations: 100,
+                seed: Some(0),
             },
             &pixels,
             ColorFormat::Rgb,
@@ -51,6 +52,7 @@ fn q10_kmeans(bencher: &mut Bencher) {
         color_thief::get_palette(
             Algorithm::KMeans {
                 max_iterations: 100,
+                seed: Some(0),
             },
             &pixels,
             ColorFormat::Rgb,
