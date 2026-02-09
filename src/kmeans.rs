@@ -1,5 +1,5 @@
 use super::{Color, ColorFormat, PaletteGenerator};
-use rand::{prelude::*, rngs::StdRng, SeedableRng};
+use rand::{SeedableRng, prelude::*, rngs::StdRng};
 use rayon::prelude::*;
 use std::collections::HashSet;
 use thiserror::Error;
@@ -90,8 +90,8 @@ fn kmeans(samples: &[Color], k: usize, max_iter: usize, seed: Option<u64>) -> Ve
     // Dynamic batch size: use smaller batches for better convergence
     let batch_size = match samples.len() {
         n if n < 100 => n.min(10),
-        n if n < 1000 => (n / 20).max(20).min(50),
-        n => (n / 50).max(50).min(200),
+        n if n < 1000 => (n / 20).clamp(20, 50),
+        n => (n / 50).clamp(50, 200),
     };
     let mut prev_centroids = Vec::with_capacity(k);
 
