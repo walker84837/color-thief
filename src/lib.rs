@@ -84,7 +84,7 @@ pub enum ColorFormat {
 
 impl ColorFormat {
     /// Returns the number of channels in a color format.
-    fn channels(&self) -> usize {
+    const fn channels(&self) -> usize {
         match self {
             ColorFormat::Rgb => 3,
             ColorFormat::Rgba => 4,
