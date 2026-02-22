@@ -62,5 +62,35 @@ fn q10_kmeans(bencher: &mut Bencher) {
     })
 }
 
-benchmark_group!(benches, q1, q10, q1_kmeans, q10_kmeans);
+fn q1_octree(bencher: &mut Bencher) {
+    let img = image::open(&Path::new("images/photo1.jpg")).unwrap();
+    let pixels = get_image_buffer(img);
+    bencher.iter(|| {
+        color_thief::get_palette(
+            Algorithm::Octree { max_depth: None },
+            &pixels,
+            ColorFormat::Rgb,
+            1,
+            10,
+        )
+    })
+}
+
+fn q10_octree(bencher: &mut Bencher) {
+    let img = image::open(&Path::new("images/photo1.jpg")).unwrap();
+    let pixels = get_image_buffer(img);
+    bencher.iter(|| {
+        color_thief::get_palette(
+            Algorithm::Octree { max_depth: None },
+            &pixels,
+            ColorFormat::Rgb,
+            10,
+            10,
+        )
+    })
+}
+
+benchmark_group!(
+    benches, q1, q10, q1_kmeans, q10_kmeans, q1_octree, q10_octree
+);
 benchmark_main!(benches);

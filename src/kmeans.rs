@@ -38,7 +38,7 @@ impl PaletteGenerator for KMeans {
             if i + colors_count > pixels.len() {
                 break;
             }
-            let (r, g, b, a) = color_parts(pixels, color_format, i);
+            let (r, g, b, a) = color_format.color_parts(pixels, i);
             if a >= 125 && !(r > 250 && g > 250 && b > 250) {
                 samples.push(Color::new(r, g, b));
             }
@@ -366,7 +366,6 @@ fn centroids_converged(prev: &[Color], current: &[Color], threshold: u8) -> bool
     true
 }
 
-/// Gets the squared distance between two colors
 const fn color_distance_sq(c1: &Color, c2: &Color) -> u32 {
     let dr = c1.r.abs_diff(c2.r) as u32;
     let dg = c1.g.abs_diff(c2.g) as u32;
@@ -374,35 +373,6 @@ const fn color_distance_sq(c1: &Color, c2: &Color) -> u32 {
     dr * dr + dg * dg + db * db
 }
 
-/// Extracts RGBA color components from a pixel buffer based on the specified color format.
-/// Returns a tuple of (red, green, blue, alpha) values.
-const fn color_parts(pixels: &[u8], color_format: ColorFormat, pos: usize) -> (u8, u8, u8, u8) {
-    match color_format {
-        ColorFormat::Rgb => (pixels[pos], pixels[pos + 1], pixels[pos + 2], 255),
-        ColorFormat::Rgba => (
-            pixels[pos],
-            pixels[pos + 1],
-            pixels[pos + 2],
-            pixels[pos + 3],
-        ),
-        ColorFormat::Argb => (
-            pixels[pos + 1],
-            pixels[pos + 2],
-            pixels[pos + 3],
-            pixels[pos],
-        ),
-        ColorFormat::Bgr => (pixels[pos + 2], pixels[pos + 1], pixels[pos], 255),
-        ColorFormat::Bgra => (
-            pixels[pos + 2],
-            pixels[pos + 1],
-            pixels[pos],
-            pixels[pos + 3],
-        ),
-    }
-}
-
-/// Calculates the minimum squared distance from a sample to all existing centroids.
-/// Used in k-means++ initialization for probabilistic centroid selection.
 const fn min_distance_to_centroids(centroids: &[Color], sample: &Color) -> u32 {
     let mut i = 0;
     let mut min_dist_sq = u32::MAX;

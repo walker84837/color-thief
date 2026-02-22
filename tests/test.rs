@@ -95,3 +95,45 @@ fn image2_kmeans() {
     assert!(colors.iter().any(|c| c.r < 80 && c.g < 70 && c.b < 60)); // Dark brown
     assert!(colors.iter().any(|c| c.r > 170 && c.g > 140 && c.b > 110)); // Light brown
 }
+
+#[test]
+fn image1_octree() {
+    let img = image::open(&path::Path::new("images/photo1.jpg")).unwrap();
+    let (buffer, color_type) = get_image_buffer(img);
+    let colors = color_thief::get_palette(
+        Algorithm::Octree { max_depth: None },
+        &buffer,
+        color_type,
+        10,
+        10,
+    )
+    .unwrap();
+
+    // Verify we get colors and they are valid
+    assert!(!colors.is_empty());
+    assert!(colors.len() <= 10);
+    for c in &colors {
+        assert!(c.r <= 255 && c.g <= 255 && c.b <= 255);
+    }
+}
+
+#[test]
+fn image2_octree() {
+    let img = image::open(&path::Path::new("images/iguana.png")).unwrap();
+    let (buffer, color_type) = get_image_buffer(img);
+    let colors = color_thief::get_palette(
+        Algorithm::Octree { max_depth: None },
+        &buffer,
+        color_type,
+        10,
+        10,
+    )
+    .unwrap();
+
+    // Verify we get colors and they are valid
+    assert!(!colors.is_empty());
+    assert!(colors.len() <= 10);
+    for c in &colors {
+        assert!(c.r <= 255 && c.g <= 255 && c.b <= 255);
+    }
+}

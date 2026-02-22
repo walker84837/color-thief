@@ -19,12 +19,16 @@
 
 mod kmeans;
 mod mmcq;
+mod octree;
 
 use kmeans::KMeans as KMeansImpl;
+use octree::Octree as OctreeImpl;
+use std::num::NonZeroU8;
 use std::str::FromStr;
 use thiserror::Error;
 
 use mmcq::MmcqError;
+use octree::OctreeError;
 
 pub use rgb::RGB8 as Color;
 
@@ -38,7 +42,7 @@ const FRACTION_BY_POPULATION: f64 = 0.75;
 const MMCQ_ITERATION_LIMIT: i32 = 1000;
 
 /// Choice of algorithm for color palette generation.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum Algorithm {
     /// Original MMCQ (Modified Median Cut Quantization) algorithm. This algorithm was used in the original code of `color-thief-rs`.
     ///
@@ -48,6 +52,7 @@ pub enum Algorithm {
     /// until the desired number of colors is reached. It's generally faster and effective for
     /// reducing the number of colors while preserving visual quality, especially for images
     /// with distinct color regions. It might be less accurate for images with subtle color gradients.
+    #[default]
     Mmcq,
     /// K-means clustering algorithm. This algorithm was added in the fork.
     ///
@@ -64,6 +69,27 @@ pub enum Algorithm {
         max_iterations: usize,
         /// An optional seed for the random number generator, allowing for reproducible results.
         seed: Option<u64>,
+    },
+    /// Octree color quantization algorithm. This algorithm was added in the fork.
+    ///
+    /// *Summary*: Fast, memory-efficient, good quality.
+    ///
+    /// Octree quantization works by recursively dividing the RGB color space into 8 octants
+    /// (hence "octree"). Each level of depth increases precision by 1 bit per channel.
+    /// The algorithm builds a tree structure where leaf nodes represent quantized colors,
+    /// and reduces the tree by merging nodes until the desired palette size is reached.
+    ///
+    /// - Depth 1: 8 possible leaf nodes (coarse quantization)
+    /// - Depth 8: 256³ = 16,777,216 possible leaf nodes (fine quantization)
+    ///
+    /// Higher depth values provide more precise color representation but use more memory.
+    /// The default depth is 8, which provides excellent quality for most images.
+    Octree {
+        /// Maximum tree depth. Valid range is 1 to 8.
+        ///
+        /// Higher values provide more precise color representation but use more memory.
+        /// Default is 8.
+        max_depth: Option<NonZeroU8>,
     },
 }
 
@@ -93,6 +119,33 @@ impl ColorFormat {
             ColorFormat::Bgra => 4,
         }
     }
+
+    /// Extracts RGBA color components from a pixel buffer based on the specified color format.
+    /// Returns a tuple of (red, green, blue, alpha) values.
+    pub const fn color_parts(&self, pixels: &[u8], pos: usize) -> (u8, u8, u8, u8) {
+        match self {
+            ColorFormat::Rgb => (pixels[pos], pixels[pos + 1], pixels[pos + 2], 255),
+            ColorFormat::Rgba => (
+                pixels[pos],
+                pixels[pos + 1],
+                pixels[pos + 2],
+                pixels[pos + 3],
+            ),
+            ColorFormat::Argb => (
+                pixels[pos + 1],
+                pixels[pos + 2],
+                pixels[pos + 3],
+                pixels[pos],
+            ),
+            ColorFormat::Bgr => (pixels[pos + 2], pixels[pos + 1], pixels[pos], 255),
+            ColorFormat::Bgra => (
+                pixels[pos + 2],
+                pixels[pos + 1],
+                pixels[pos],
+                pixels[pos + 3],
+            ),
+        }
+    }
 }
 
 /// Represents an error that can occur during color palette generation.
@@ -109,6 +162,9 @@ pub enum Error {
     /// An error occurred in the K-Means algorithm.
     #[error(transparent)]
     KMeans(#[from] kmeans::KMeansError),
+    /// An error occurred in the Octree algorithm.
+    #[error(transparent)]
+    Octree(#[from] OctreeError),
 }
 
 /// Represents an error for invalid input when parsing a color format
@@ -173,6 +229,13 @@ pub fn get_palette(
             kmeans
                 .generate_palette(pixels, color_format, quality, max_colors)
                 .map_err(Error::KMeans)
+        }
+
+        Algorithm::Octree { max_depth } => {
+            let octree = OctreeImpl::new(max_depth);
+            octree
+                .generate_palette(pixels, color_format, quality, max_colors)
+                .map_err(Error::Octree)
         }
     }
 }
