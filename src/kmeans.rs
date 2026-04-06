@@ -14,6 +14,31 @@ pub struct KMeans {
 #[error("k-means error")]
 pub struct KMeansError;
 
+struct KMeansBuffers {
+    sums_r: Vec<u64>,
+    sums_g: Vec<u64>,
+    sums_b: Vec<u64>,
+    counts: Vec<usize>,
+}
+
+impl KMeansBuffers {
+    fn new(k: usize) -> Self {
+        Self {
+            sums_r: vec![0u64; k],
+            sums_g: vec![0u64; k],
+            sums_b: vec![0u64; k],
+            counts: vec![0usize; k],
+        }
+    }
+
+    fn clear(&mut self) {
+        self.sums_r.fill(0);
+        self.sums_g.fill(0);
+        self.sums_b.fill(0);
+        self.counts.fill(0);
+    }
+}
+
 impl PaletteGenerator for KMeans {
     type Error = KMeansError;
 
@@ -38,6 +63,7 @@ impl PaletteGenerator for KMeans {
             if i + colors_count > pixels.len() {
                 break;
             }
+
             let (r, g, b, a) = color_format.color_parts(pixels, i);
             if a >= 125 && !(r > 250 && g > 250 && b > 250) {
                 samples.push(Color::new(r, g, b));
@@ -49,11 +75,12 @@ impl PaletteGenerator for KMeans {
         }
 
         let k = max_colors as usize;
-
         let centroids = kmeans(&samples, k, self.max_iterations, self.seed);
 
+        // De-duplicate and truncate
         let mut seen = HashSet::with_capacity(k);
         let mut unique_centroids = Vec::with_capacity(centroids.len());
+
         for color in centroids {
             if seen.insert(color) {
                 unique_centroids.push(color);
@@ -70,7 +97,7 @@ fn kmeans(samples: &[Color], k: usize, max_iter: usize, seed: Option<u64>) -> Ve
         return Vec::new();
     }
 
-    // clamp k to sample count
+    // Clamp k to sample count
     let k = k.min(samples.len());
 
     let mut rng: Box<dyn RngCore> = match seed {
@@ -81,11 +108,8 @@ fn kmeans(samples: &[Color], k: usize, max_iter: usize, seed: Option<u64>) -> Ve
     let mut centroids = initialize_centroids(samples, k, &mut rng);
     let mut assignments = vec![usize::MAX; samples.len()];
 
-    // preallocate buffers for update_centroids and reuse each iteration
-    let mut sums_r = vec![0u64; k];
-    let mut sums_g = vec![0u64; k];
-    let mut sums_b = vec![0u64; k];
-    let mut counts = vec![0usize; k];
+    // Preallocate buffers for update_centroids and reuse each iteration
+    let mut buffers = KMeansBuffers::new(k);
 
     // Dynamic batch size: use smaller batches for better convergence
     let batch_size = match samples.len() {
@@ -93,6 +117,7 @@ fn kmeans(samples: &[Color], k: usize, max_iter: usize, seed: Option<u64>) -> Ve
         n if n < 1000 => (n / 20).clamp(20, 50),
         n => (n / 50).clamp(50, 200),
     };
+
     let mut prev_centroids = Vec::with_capacity(k);
 
     for iter in 0..max_iter {
@@ -104,17 +129,7 @@ fn kmeans(samples: &[Color], k: usize, max_iter: usize, seed: Option<u64>) -> Ve
         }
 
         prev_centroids.clone_from(&centroids);
-        centroids = update_centroids_mini_batch(
-            samples,
-            &assignments,
-            k,
-            &mut rng,
-            batch_size,
-            &mut sums_r,
-            &mut sums_g,
-            &mut sums_b,
-            &mut counts,
-        );
+        centroids = update_centroids_mini_batch(samples, &assignments, k, &mut rng, &mut buffers);
 
         // Early convergence check: if centroids haven't moved much
         if iter > 0 && centroids_converged(&prev_centroids, &centroids, 2) {
@@ -274,19 +289,10 @@ fn update_centroids_mini_batch(
     assignments: &[usize],
     k: usize,
     rng: &mut dyn RngCore,
-    _batch_size: usize,
-    sums_r: &mut [u64],
-    sums_g: &mut [u64],
-    sums_b: &mut [u64],
-    counts: &mut [usize],
+    buffers: &mut KMeansBuffers,
 ) -> Vec<Color> {
     // Clear accumulators
-    for i in 0..k {
-        sums_r[i] = 0;
-        sums_g[i] = 0;
-        sums_b[i] = 0;
-        counts[i] = 0;
-    }
+    buffers.clear();
 
     // Parallel accumulation for assigned samples
     let assigned_samples: Vec<_> = assignments
@@ -312,24 +318,24 @@ fn update_centroids_mini_batch(
             .collect();
 
         for (cluster, r, g, b) in results {
-            counts[cluster] += 1;
-            sums_r[cluster] += r;
-            sums_g[cluster] += g;
-            sums_b[cluster] += b;
+            buffers.counts[cluster] += 1;
+            buffers.sums_r[cluster] += r;
+            buffers.sums_g[cluster] += g;
+            buffers.sums_b[cluster] += b;
         }
     } else {
         // Sequential version for smaller datasets
         for &(idx, cluster) in &assigned_samples {
-            counts[cluster] += 1;
-            sums_r[cluster] += samples[idx].r as u64;
-            sums_g[cluster] += samples[idx].g as u64;
-            sums_b[cluster] += samples[idx].b as u64;
+            buffers.counts[cluster] += 1;
+            buffers.sums_r[cluster] += samples[idx].r as u64;
+            buffers.sums_g[cluster] += samples[idx].g as u64;
+            buffers.sums_b[cluster] += samples[idx].b as u64;
         }
     }
 
     let mut new_centroids = Vec::with_capacity(k);
     for i in 0..k {
-        if counts[i] == 0 {
+        if buffers.counts[i] == 0 {
             // Replace empty cluster with a random sample
             if let Some(&s) = samples.choose(rng) {
                 new_centroids.push(s);
@@ -338,14 +344,15 @@ fn update_centroids_mini_batch(
             }
         } else {
             // Integer average with rounding
-            let half_count = counts[i] as u64 >> 1;
-            let count = counts[i] as u64;
-            let r = ((sums_r[i] + half_count) / count) as u8;
-            let g = ((sums_g[i] + half_count) / count) as u8;
-            let b = ((sums_b[i] + half_count) / count) as u8;
+            let half_count = buffers.counts[i] as u64 >> 1;
+            let count = buffers.counts[i] as u64;
+            let r = ((buffers.sums_r[i] + half_count) / count) as u8;
+            let g = ((buffers.sums_g[i] + half_count) / count) as u8;
+            let b = ((buffers.sums_b[i] + half_count) / count) as u8;
             new_centroids.push(Color::new(r, g, b));
         }
     }
+
     new_centroids
 }
 
@@ -363,6 +370,7 @@ fn centroids_converged(prev: &[Color], current: &[Color], threshold: u8) -> bool
             return false;
         }
     }
+
     true
 }
 
@@ -370,6 +378,7 @@ const fn color_distance_sq(c1: &Color, c2: &Color) -> u32 {
     let dr = c1.r.abs_diff(c2.r) as u32;
     let dg = c1.g.abs_diff(c2.g) as u32;
     let db = c1.b.abs_diff(c2.b) as u32;
+
     dr * dr + dg * dg + db * db
 }
 

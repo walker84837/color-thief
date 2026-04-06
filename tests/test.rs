@@ -26,8 +26,52 @@ fn assert_color_approx(left: Color, right: Color, tolerance: u8) {
 }
 
 #[test]
+fn color_format_from_str() {
+    use std::str::FromStr;
+    assert_eq!(ColorFormat::from_str("rgb").unwrap(), ColorFormat::Rgb);
+    assert_eq!(ColorFormat::from_str("RGBA").unwrap(), ColorFormat::Rgba);
+    assert_eq!(ColorFormat::from_str("argb").unwrap(), ColorFormat::Argb);
+    assert_eq!(ColorFormat::from_str("bgr").unwrap(), ColorFormat::Bgr);
+    assert_eq!(ColorFormat::from_str("BGRA").unwrap(), ColorFormat::Bgra);
+    assert!(ColorFormat::from_str("invalid").is_err());
+}
+
+#[test]
+fn kmeans_determinism() {
+    let img = image::open(path::Path::new("images/photo1.jpg")).unwrap();
+    let (buffer, color_type) = get_image_buffer(img);
+
+    let seed = Some(42);
+    let colors1 = color_thief::get_palette(
+        Algorithm::KMeans {
+            max_iterations: 10,
+            seed,
+        },
+        &buffer,
+        color_type,
+        10,
+        10,
+    )
+    .unwrap();
+
+    let colors2 = color_thief::get_palette(
+        Algorithm::KMeans {
+            max_iterations: 10,
+            seed,
+        },
+        &buffer,
+        color_type,
+        10,
+        10,
+    )
+    .unwrap();
+
+    assert_eq!(colors1, colors2);
+}
+
+#[test]
 fn image1_mmcq() {
-    let img = image::open(&path::Path::new("images/photo1.jpg")).unwrap();
+    let img = image::open(path::Path::new("images/photo1.jpg")).unwrap();
     let (buffer, color_type) = get_image_buffer(img);
     let colors = color_thief::get_palette(Algorithm::Mmcq, &buffer, color_type, 10, 10).unwrap();
 
@@ -42,7 +86,7 @@ fn image1_mmcq() {
 
 #[test]
 fn image1_kmeans() {
-    let img = image::open(&path::Path::new("images/photo1.jpg")).unwrap();
+    let img = image::open(path::Path::new("images/photo1.jpg")).unwrap();
     let (buffer, color_type) = get_image_buffer(img);
     let colors = color_thief::get_palette(
         Algorithm::KMeans {
@@ -64,7 +108,7 @@ fn image1_kmeans() {
 
 #[test]
 fn image2_mmcq() {
-    let img = image::open(&path::Path::new("images/iguana.png")).unwrap();
+    let img = image::open(path::Path::new("images/iguana.png")).unwrap();
     let (buffer, color_type) = get_image_buffer(img);
     let colors = color_thief::get_palette(Algorithm::Mmcq, &buffer, color_type, 10, 10).unwrap();
 
@@ -76,7 +120,7 @@ fn image2_mmcq() {
 
 #[test]
 fn image2_kmeans() {
-    let img = image::open(&path::Path::new("images/iguana.png")).unwrap();
+    let img = image::open(path::Path::new("images/iguana.png")).unwrap();
     let (buffer, color_type) = get_image_buffer(img);
     let colors = color_thief::get_palette(
         Algorithm::KMeans {
@@ -98,7 +142,7 @@ fn image2_kmeans() {
 
 #[test]
 fn image1_octree() {
-    let img = image::open(&path::Path::new("images/photo1.jpg")).unwrap();
+    let img = image::open(path::Path::new("images/photo1.jpg")).unwrap();
     let (buffer, color_type) = get_image_buffer(img);
     let colors = color_thief::get_palette(
         Algorithm::Octree { max_depth: None },
@@ -112,14 +156,11 @@ fn image1_octree() {
     // Verify we get colors and they are valid
     assert!(!colors.is_empty());
     assert!(colors.len() <= 10);
-    for c in &colors {
-        assert!(c.r <= 255 && c.g <= 255 && c.b <= 255);
-    }
 }
 
 #[test]
 fn image2_octree() {
-    let img = image::open(&path::Path::new("images/iguana.png")).unwrap();
+    let img = image::open(path::Path::new("images/iguana.png")).unwrap();
     let (buffer, color_type) = get_image_buffer(img);
     let colors = color_thief::get_palette(
         Algorithm::Octree { max_depth: None },
@@ -133,7 +174,4 @@ fn image2_octree() {
     // Verify we get colors and they are valid
     assert!(!colors.is_empty());
     assert!(colors.len() <= 10);
-    for c in &colors {
-        assert!(c.r <= 255 && c.g <= 255 && c.b <= 255);
-    }
 }

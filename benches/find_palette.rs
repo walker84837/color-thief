@@ -17,19 +17,19 @@ fn get_image_buffer(img: image::DynamicImage) -> Vec<u8> {
 }
 
 fn q1(bencher: &mut Bencher) {
-    let img = image::open(&Path::new("images/photo1.jpg")).unwrap();
+    let img = image::open(Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
     bencher.iter(|| color_thief::get_palette(Algorithm::Mmcq, &pixels, ColorFormat::Rgb, 1, 10))
 }
 
 fn q10(bencher: &mut Bencher) {
-    let img = image::open(&Path::new("images/photo1.jpg")).unwrap();
+    let img = image::open(Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
     bencher.iter(|| color_thief::get_palette(Algorithm::Mmcq, &pixels, ColorFormat::Rgb, 10, 10))
 }
 
 fn q1_kmeans(bencher: &mut Bencher) {
-    let img = image::open(&Path::new("images/photo1.jpg")).unwrap();
+    let img = image::open(Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
     bencher.iter(|| {
         color_thief::get_palette(
@@ -46,7 +46,7 @@ fn q1_kmeans(bencher: &mut Bencher) {
 }
 
 fn q10_kmeans(bencher: &mut Bencher) {
-    let img = image::open(&Path::new("images/photo1.jpg")).unwrap();
+    let img = image::open(Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
     bencher.iter(|| {
         color_thief::get_palette(
@@ -63,7 +63,7 @@ fn q10_kmeans(bencher: &mut Bencher) {
 }
 
 fn q1_octree(bencher: &mut Bencher) {
-    let img = image::open(&Path::new("images/photo1.jpg")).unwrap();
+    let img = image::open(Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
     bencher.iter(|| {
         color_thief::get_palette(
@@ -77,7 +77,7 @@ fn q1_octree(bencher: &mut Bencher) {
 }
 
 fn q10_octree(bencher: &mut Bencher) {
-    let img = image::open(&Path::new("images/photo1.jpg")).unwrap();
+    let img = image::open(Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
     bencher.iter(|| {
         color_thief::get_palette(

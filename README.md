@@ -26,12 +26,29 @@ A Rust implementation of the color-thief algorithm, forked from the archived [Ra
 
 ### Performance
 
-About 150x faster that JS version.
+About 150x faster than the JS version for MMCQ.
 
 ```text
 test q1  ... bench:   1,429,800 ns/iter (+/- 21,987)
 test q10 ... bench:     854,297 ns/iter (+/- 25,468)
 ```
+
+| Algorithm | Speed | Accuracy | Best For |
+|-----------|-------|----------|----------|
+| **MMCQ**  | Fast  | Medium   | General purpose, extracting distinct colors. |
+| **K-Means**| Slow  | High     | High-quality palettes, subtle gradients. |
+| **Octree** | Fast  | High     | Memory-efficient, high-quality palettes. |
+
+### Algorithm Selection
+
+`color-thief-rs` provides several algorithms for color quantization:
+
+- **MMCQ (Modified Median Cut Quantization)**: The original algorithm used in color-thief. It's fast and effective for most images.
+- **K-Means**: An iterative algorithm that groups similar colors. It's more accurate for images with subtle gradients but slower. We use K-Means++ for initialization and mini-batching for performance.
+- **Octree**: Builds a tree of color frequencies. It's very fast and often provides better quality than MMCQ.
+
+#### Parallelization
+K-Means uses `rayon` for parallel processing when the sample size exceeds 1000, improving performance on multi-core systems.
 
 ### Changes and migration guide (from previous versions to 0.2.2)
 
@@ -55,11 +72,11 @@ To migrate, you must now specify the algorithm to use. For the original behavior
 
 #### New Features
 
-* **K-Means algorithm**: A new `Algorithm` enum has been introduced, allowing you to choose between `Mmcq` (the original Modified Median Cut Quantization algorithm) and `KMeans` (K-means clustering algorithm).
-  * `Algorithm::Mmcq`: Fast, distinct colors, less accurate for subtle gradients.
-  * `Algorithm::KMeans { max_iterations: usize }`: Slower, better for subtle gradients, more accurate overall. The `max_iterations` field allows you to specify the maximum number of iterations for the K-Means algorithm to run.
-* **Expanded `ColorFormat`**: The `ColorFormat` enum now supports more formats: `Rgb`, `Rgba`, `Argb`, `Bgr`, `Bgra`.
-* **Improved error handling**: The `Error` enum now provides more descriptive error messages.
+* **K-Means algorithm**: A new `Algorithm` enum has been introduced, allowing you to choose between `Mmcq` (the original algorithm) and `KMeans`.
+  * `Algorithm::KMeans { max_iterations: usize, seed: Option<u64> }`: Slower, better for subtle gradients. The `seed` field allows for reproducible results.
+* **Octree algorithm**: A new `Algorithm::Octree { max_depth: Option<NonZeroU8> }` provides an efficient and high-quality alternative.
+* **Expanded `ColorFormat`**: Support for `Rgb`, `Rgba`, `Argb`, `Bgr`, `Bgra`.
+* **Improved error handling**: More descriptive error messages via `thiserror`.
 
 #### Migration example
 
@@ -77,11 +94,22 @@ use color_thief::Algorithm;
 // For the original behavior (MMCQ)
 let colors_mmcq = color_thief::get_palette(Algorithm::Mmcq, &buffer, color_type, 10, 10).unwrap();
 
-// For the new K-Means algorithm
+// For the new K-Means algorithm with a seed
 let colors_kmeans = color_thief::get_palette(
     Algorithm::KMeans {
         max_iterations: 100,
+        seed: Some(42),
     },
+    &buffer,
+    color_type,
+    10,
+    10,
+)
+.unwrap();
+
+// For the new Octree algorithm
+let colors_octree = color_thief::get_palette(
+    Algorithm::Octree { max_depth: None },
     &buffer,
     color_type,
     10,

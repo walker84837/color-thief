@@ -68,6 +68,9 @@ pub enum Algorithm {
         /// The maximum number of iterations for the K-Means algorithm to run.
         max_iterations: usize,
         /// An optional seed for the random number generator, allowing for reproducible results.
+        ///
+        /// If set to `None`, a non-deterministic RNG will be used, meaning different calls with
+        /// the same input might produce slightly different palettes.
         seed: Option<u64>,
     },
     /// Octree color quantization algorithm. This algorithm was added in the fork.
