@@ -1,8 +1,10 @@
 use super::{Color, ColorFormat, PaletteGenerator};
+use std::collections::BinaryHeap;
 use std::num::NonZeroU8;
 use thiserror::Error;
 
-const MAX_DEPTH: u8 = 8;
+const MAX_DEPTH: u8 = 6;
+const QUANTIZE_SHIFT: u8 = 2;
 
 #[derive(Clone, Debug, Error)]
 #[error("octree error")]
@@ -18,101 +20,138 @@ impl Octree {
     }
 }
 
-#[derive(Default)]
+struct Arena {
+    nodes: Vec<Node>,
+}
+
+#[derive(Copy, Clone, Default)]
 struct Node {
     r_sum: u64,
     g_sum: u64,
     b_sum: u64,
     pixel_count: u64,
-    children: [Option<Box<Node>>; 8],
+    children: [Option<usize>; 8],
     is_leaf: bool,
+    parent: Option<usize>,
 }
 
-impl Node {
+impl Arena {
     fn new() -> Self {
-        Node::default()
+        Arena {
+            nodes: Vec::with_capacity(200_000),
+        }
     }
 
-    fn add_color(&mut self, r: u8, g: u8, b: u8, depth: u8, max_depth: u8) {
-        self.pixel_count += 1;
-
-        if depth == max_depth {
-            self.is_leaf = true;
-            self.r_sum += r as u64;
-            self.g_sum += g as u64;
-            self.b_sum += b as u64;
-            return;
-        }
-
-        let index = self.get_child_index(r, g, b, depth);
-
-        if self.children[index as usize].is_none() {
-            self.children[index as usize] = Some(Box::new(Node::new()));
-        }
-
-        self.children[index as usize]
-            .as_mut()
-            .unwrap()
-            .add_color(r, g, b, depth + 1, max_depth);
+    fn alloc(&mut self, _level: u8, parent: Option<usize>) -> usize {
+        let node = Node {
+            parent,
+            ..Default::default()
+        };
+        self.nodes.push(node);
+        self.nodes.len() - 1
     }
 
-    fn get_child_index(&self, r: u8, g: u8, b: u8, depth: u8) -> u8 {
-        let shift = 7 - depth;
-        let r_bit = (r >> shift) & 1;
-        let g_bit = (g >> shift) & 1;
-        let b_bit = (b >> shift) & 1;
-
+    #[inline]
+    const fn get_child_index(r: u8, g: u8, b: u8, depth: u8) -> u8 {
+        let shift = 5 - depth;
+        let r_bit = ((r >> QUANTIZE_SHIFT) >> shift) & 1;
+        let g_bit = ((g >> QUANTIZE_SHIFT) >> shift) & 1;
+        let b_bit = ((b >> QUANTIZE_SHIFT) >> shift) & 1;
         (r_bit << 2) | (g_bit << 1) | b_bit
     }
 
-    fn get_leaf_nodes(&self, leaves: &mut Vec<(u64, Color)>) {
-        if self.is_leaf {
-            if self.pixel_count > 0 {
-                let r = (self.r_sum / self.pixel_count) as u8;
-                let g = (self.g_sum / self.pixel_count) as u8;
-                let b = (self.b_sum / self.pixel_count) as u8;
-                leaves.push((self.pixel_count, Color::new(r, g, b)));
-            }
+    fn add_color(&mut self, root_idx: usize, r: u8, g: u8, b: u8, depth: u8, max_depth: u8) {
+        let qr = r >> QUANTIZE_SHIFT;
+        let qg = g >> QUANTIZE_SHIFT;
+        let qb = b >> QUANTIZE_SHIFT;
+
+        let node = &mut self.nodes[root_idx];
+        node.pixel_count += 1;
+
+        if depth == max_depth {
+            node.is_leaf = true;
+            node.r_sum += qr as u64;
+            node.g_sum += qg as u64;
+            node.b_sum += qb as u64;
             return;
         }
 
-        for child in self.children.iter().flatten() {
-            child.get_leaf_nodes(leaves);
+        let index = Self::get_child_index(qr, qg, qb, depth);
+
+        if self.nodes[root_idx].children[index as usize].is_none() {
+            let child_idx = self.alloc(depth + 1, Some(root_idx));
+            self.nodes[root_idx].children[index as usize] = Some(child_idx);
         }
+
+        let child_idx = self.nodes[root_idx].children[index as usize].unwrap();
+        self.add_color(child_idx, r, g, b, depth + 1, max_depth);
     }
 
-    fn merge_leaves(&mut self) -> usize {
-        let mut count = 0;
-        let mut r_sum = 0;
-        let mut g_sum = 0;
-        let mut b_sum = 0;
+    fn collect_leaves(&self, root_idx: usize, leaves: &mut Vec<(u64, Color)>) {
+        let mut stack = vec![root_idx];
 
-        for child_opt in &mut self.children {
-            if let Some(child) = child_opt.take() {
-                r_sum += child.r_sum;
-                g_sum += child.g_sum;
-                b_sum += child.b_sum;
-                count += 1;
+        while let Some(idx) = stack.pop() {
+            let node = &self.nodes[idx];
+
+            if node.is_leaf {
+                if node.pixel_count > 0 {
+                    let r = (node.r_sum / node.pixel_count) as u8;
+                    let g = (node.g_sum / node.pixel_count) as u8;
+                    let b = (node.b_sum / node.pixel_count) as u8;
+                    leaves.push((node.pixel_count, Color::new(r, g, b)));
+                }
+            } else {
+                for &child_idx in &node.children {
+                    if let Some(idx) = child_idx {
+                        stack.push(idx);
+                    }
+                }
             }
         }
-
-        self.r_sum = r_sum;
-        self.g_sum = g_sum;
-        self.b_sum = b_sum;
-        self.is_leaf = true;
-
-        if count > 0 { count - 1 } else { 0 }
     }
 
-    fn find_node_at_path(&mut self, path: &[u8]) -> &mut Node {
-        let mut current = self;
+    fn merge_node(&mut self, idx: usize) -> usize {
+        let child_indices: Vec<usize> = (0..8)
+            .filter_map(|i| self.nodes[idx].children[i].take())
+            .collect();
 
-        for &index in path {
-            current = current.children[index as usize].as_mut().unwrap();
-        }
+        let child_data: Vec<(u64, u64, u64)> = child_indices
+            .iter()
+            .map(|&c| {
+                let node = self.nodes[c];
+                (node.r_sum, node.g_sum, node.b_sum)
+            })
+            .collect();
 
-        current
+        let child_count = child_data.len();
+        let (r_sum, g_sum, b_sum) = child_data
+            .iter()
+            .fold((0u64, 0u64, 0u64), |(r, g, b), (cr, cg, cb)| {
+                (r + cr, g + cg, b + cb)
+            });
+
+        let node = &mut self.nodes[idx];
+        node.r_sum = r_sum;
+        node.g_sum = g_sum;
+        node.b_sum = b_sum;
+        node.is_leaf = true;
+
+        if child_count > 0 { child_count - 1 } else { 0 }
     }
+
+    fn has_children(&self, idx: usize) -> bool {
+        self.nodes[idx].children.iter().any(|c| c.is_some())
+    }
+
+    fn pixel_count(&self, idx: usize) -> u64 {
+        self.nodes[idx].pixel_count
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, PartialOrd, Ord)]
+struct MergeCandidate {
+    pixel_count: u64,
+    node_idx: usize,
 }
 
 impl PaletteGenerator for Octree {
@@ -125,14 +164,17 @@ impl PaletteGenerator for Octree {
         quality: u8,
         max_colors: u8,
     ) -> Result<Vec<Color>, Self::Error> {
-        // Parameter initialization
-        let max_depth = self.max_depth.map_or(MAX_DEPTH, |d| d.get()).min(MAX_DEPTH);
-        let mut root = Node::new();
+        let max_depth = self
+            .max_depth
+            .map_or(MAX_DEPTH, |d| d.get())
+            .clamp(1, MAX_DEPTH);
+
+        let mut arena = Arena::new();
+        let root_idx = arena.alloc(0, None);
 
         let channels = color_format.channels();
         let step = quality as usize;
 
-        // Pixel insertion loop
         for i in (0..pixels.len()).step_by(channels * step) {
             if i + channels > pixels.len() {
                 break;
@@ -140,81 +182,72 @@ impl PaletteGenerator for Octree {
 
             let (r, g, b, a) = color_format.color_parts(pixels, i);
             if a >= 125 && !(r > 250 && g > 250 && b > 250) {
-                root.add_color(r, g, b, 0, max_depth);
+                arena.add_color(root_idx, r, g, b, 0, max_depth);
             }
         }
 
-        // Initial leaf counting
-        let mut initial_leaves = Vec::new();
-        root.get_leaf_nodes(&mut initial_leaves);
-        let mut leaf_count = initial_leaves.len();
+        let mut leaves = Vec::new();
+        arena.collect_leaves(root_idx, &mut leaves);
 
-        if leaf_count <= max_colors as usize {
-            initial_leaves.sort_by(|a, b| b.0.cmp(&a.0));
-            return Ok(initial_leaves.into_iter().map(|(_, c)| c).collect());
+        if leaves.len() <= max_colors as usize {
+            leaves.sort_by(|a, b| b.0.cmp(&a.0));
+            return Ok(leaves.into_iter().map(|(_, c)| c).collect());
         }
 
-        // Tree reduction phase using safe paths
-        for d in (0..max_depth).rev() {
-            let mut parent_paths = Vec::new();
-            let mut path = Vec::with_capacity(d as usize);
+        let mut heap: BinaryHeap<MergeCandidate> = BinaryHeap::new();
+        let mut stack = vec![root_idx];
 
-            get_paths_at_depth(&root, 0, d, &mut path, &mut parent_paths);
+        while let Some(idx) = stack.pop() {
+            let node = &arena.nodes[idx];
 
-            // Sort by pixel count to merge nodes with fewer pixels first
-            parent_paths.sort_by(|a, b| a.0.cmp(&b.0));
+            if node.is_leaf {
+                continue;
+            }
 
-            for (_, path) in parent_paths {
-                let node = root.find_node_at_path(&path);
-                let reduced = node.merge_leaves();
-                leaf_count -= reduced;
+            let has_children = node.children.iter().any(|c| c.is_some());
+            if has_children {
+                heap.push(MergeCandidate {
+                    pixel_count: node.pixel_count,
+                    node_idx: idx,
+                });
+            }
 
-                if leaf_count <= max_colors as usize {
-                    break;
+            for &child_idx in &node.children {
+                if let Some(c) = child_idx {
+                    stack.push(c);
                 }
             }
+        }
 
-            if leaf_count <= max_colors as usize {
+        let mut leaf_count = leaves.len();
+
+        while leaf_count > max_colors as usize {
+            if let Some(candidate) = heap.pop() {
+                let reduced = arena.merge_node(candidate.node_idx);
+                leaf_count -= reduced;
+
+                if let Some(parent_idx) = arena.nodes[candidate.node_idx].parent
+                    && !arena.nodes[parent_idx].is_leaf
+                    && arena.has_children(parent_idx)
+                {
+                    heap.push(MergeCandidate {
+                        pixel_count: arena.pixel_count(parent_idx),
+                        node_idx: parent_idx,
+                    });
+                }
+            } else {
                 break;
             }
         }
 
-        // Final extraction and sorting
-        let mut final_leaves = Vec::new();
-        root.get_leaf_nodes(&mut final_leaves);
-        final_leaves.sort_by(|a, b| b.0.cmp(&a.0));
+        leaves.clear();
+        arena.collect_leaves(root_idx, &mut leaves);
+        leaves.sort_by(|a, b| b.0.cmp(&a.0));
 
-        Ok(final_leaves
+        Ok(leaves
             .into_iter()
             .take(max_colors as usize)
             .map(|(_, c)| c)
             .collect())
-    }
-}
-
-fn get_paths_at_depth(
-    node: &Node,
-    current_depth: u8,
-    target_depth: u8,
-    path: &mut Vec<u8>,
-    paths: &mut Vec<(u64, Vec<u8>)>,
-) {
-    if current_depth == target_depth {
-        if node.children.iter().any(|c| c.is_some()) {
-            paths.push((node.pixel_count, path.clone()));
-        }
-        return;
-    }
-
-    if node.is_leaf {
-        return;
-    }
-
-    for (i, child_opt) in node.children.iter().enumerate() {
-        if let Some(child) = child_opt {
-            path.push(i as u8);
-            get_paths_at_depth(child, current_depth + 1, target_depth, path, paths);
-            path.pop();
-        }
     }
 }
