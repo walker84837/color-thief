@@ -1,6 +1,6 @@
 use super::{
     Color, ColorFormat, FRACTION_BY_POPULATION, HISTOGRAM_SIZE, MMCQ_ITERATION_LIMIT, MULTIPLIER,
-    MULTIPLIER_64, PaletteGenerator, RIGHT_SHIFT, SIGNAL_BITS, VBOX_LENGTH,
+    MULTIPLIER_64, PaletteGenerator, RIGHT_SHIFT, SIGNAL_BITS, VBOX_LENGTH, pixel,
 };
 
 use std::cmp;
@@ -173,7 +173,7 @@ fn make_histogram_and_vbox(pixels: &[u8], color_format: ColorFormat, step: u8) -
         if i + colors_count > pixels.len() {
             break;
         }
-        let (r, g, b, a) = color_parts(pixels, color_format, i);
+        let (r, g, b, a) = pixel::color_parts(pixels, color_format, i);
         if a < 125 || (r > 250 && g > 250 && b > 250) {
             continue;
         }
@@ -196,31 +196,6 @@ fn make_histogram_and_vbox(pixels: &[u8], color_format: ColorFormat, step: u8) -
     let mut vbox = VBox::new(r_min, r_max, g_min, g_max, b_min, b_max);
     vbox.recalc(&histogram);
     (vbox, histogram)
-}
-
-fn color_parts(pixels: &[u8], color_format: ColorFormat, pos: usize) -> (u8, u8, u8, u8) {
-    match color_format {
-        ColorFormat::Rgb => (pixels[pos], pixels[pos + 1], pixels[pos + 2], 255),
-        ColorFormat::Rgba => (
-            pixels[pos],
-            pixels[pos + 1],
-            pixels[pos + 2],
-            pixels[pos + 3],
-        ),
-        ColorFormat::Argb => (
-            pixels[pos + 1],
-            pixels[pos + 2],
-            pixels[pos + 3],
-            pixels[pos],
-        ),
-        ColorFormat::Bgr => (pixels[pos + 2], pixels[pos + 1], pixels[pos], 255),
-        ColorFormat::Bgra => (
-            pixels[pos + 2],
-            pixels[pos + 1],
-            pixels[pos],
-            pixels[pos + 3],
-        ),
-    }
 }
 
 fn apply_median_cut(histogram: &[i32], vbox: &mut VBox) -> Result<(VBox, Option<VBox>), MmcqError> {

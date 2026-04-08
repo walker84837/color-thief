@@ -20,6 +20,7 @@
 mod kmeans;
 mod mmcq;
 mod octree;
+mod pixel;
 
 use kmeans::KMeans as KMeansImpl;
 use octree::Octree as OctreeImpl;

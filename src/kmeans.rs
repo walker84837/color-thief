@@ -1,4 +1,4 @@
-use super::{Color, ColorFormat, PaletteGenerator};
+use super::{Color, ColorFormat, PaletteGenerator, pixel};
 use rand::{SeedableRng, prelude::*, rngs::StdRng};
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -64,8 +64,8 @@ impl PaletteGenerator for KMeans {
                 break;
             }
 
-            let (r, g, b, a) = color_format.color_parts(pixels, i);
-            if a >= 125 && !(r > 250 && g > 250 && b > 250) {
+            let (r, g, b, a) = pixel::color_parts(pixels, color_format, i);
+            if !pixel::should_skip_pixel(r, g, b, a) {
                 samples.push(Color::new(r, g, b));
             }
         }
