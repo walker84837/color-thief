@@ -1,5 +1,5 @@
 use super::{Color, ColorFormat, PaletteGenerator, pixel};
-use rand::{SeedableRng, prelude::*, rngs::StdRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
 use std::collections::HashSet;
 use thiserror::Error;
@@ -100,7 +100,7 @@ fn kmeans(samples: &[Color], k: usize, max_iter: usize, seed: Option<u64>) -> Ve
     // Clamp k to sample count
     let k = k.min(samples.len());
 
-    let mut rng: Box<dyn RngCore> = match seed {
+    let mut rng: Box<dyn Rng> = match seed {
         Some(s) => Box::new(StdRng::seed_from_u64(s)),
         None => Box::new(rand::rng()),
     };
@@ -140,15 +140,16 @@ fn kmeans(samples: &[Color], k: usize, max_iter: usize, seed: Option<u64>) -> Ve
     centroids
 }
 
-fn initialize_centroids(samples: &[Color], k: usize, rng: &mut dyn RngCore) -> Vec<Color> {
+fn initialize_centroids(samples: &[Color], k: usize, rng: &mut dyn Rng) -> Vec<Color> {
     let k_eff = k.min(samples.len());
 
     // Use k-means++ style initialization for better convergence
     let mut centroids = Vec::with_capacity(k);
 
     // Choose first centroid randomly
-    if let Some(first) = samples.choose(rng) {
-        centroids.push(*first);
+    if !samples.is_empty() {
+        let idx = rng.next_u64() as usize % samples.len();
+        centroids.push(samples[idx]);
     }
 
     // Choose remaining centroids with probability proportional to distance squared
@@ -190,8 +191,9 @@ fn initialize_centroids(samples: &[Color], k: usize, rng: &mut dyn RngCore) -> V
 
         if total_distance == 0 {
             // All points are the same, pick randomly
-            if let Some(sample) = samples.choose(rng) {
-                centroids.push(*sample);
+            if !samples.is_empty() {
+                let idx = rng.next_u64() as usize % samples.len();
+                centroids.push(samples[idx]);
             }
             break;
         } else {
@@ -208,7 +210,9 @@ fn initialize_centroids(samples: &[Color], k: usize, rng: &mut dyn RngCore) -> V
 
     // Fill remaining slots with random choices if needed
     while centroids.len() < k {
-        if let Some(&s) = samples.choose(rng) {
+        if !samples.is_empty() {
+            let idx = rng.next_u64() as usize % samples.len();
+            let s = samples[idx];
             if !centroids.contains(&s) {
                 centroids.push(s);
             } else if centroids.len() == samples.len() {
@@ -228,12 +232,15 @@ fn assign_clusters_mini_batch(
     centroids: &[Color],
     assignments: &mut [usize],
     batch_size: usize,
-    rng: &mut dyn RngCore,
+    rng: &mut dyn Rng,
 ) -> bool {
     // Randomly select a mini-batch - use pre-allocated indices to reduce allocations
     let mut batch_indices = Vec::with_capacity(batch_size);
-    let sample_range = 0..samples.len();
-    batch_indices.extend(sample_range.choose_multiple(rng, batch_size));
+    let sample_len = samples.len();
+    for _ in 0..batch_size {
+        let idx = rng.next_u64() as usize % sample_len;
+        batch_indices.push(idx);
+    }
 
     // Use parallelization for larger batches, sequential for smaller ones
     let new_assignments: Vec<(usize, usize)> = if batch_indices.len() >= 20 {
@@ -288,7 +295,7 @@ fn update_centroids_mini_batch(
     samples: &[Color],
     assignments: &[usize],
     k: usize,
-    rng: &mut dyn RngCore,
+    rng: &mut dyn Rng,
     buffers: &mut KMeansBuffers,
 ) -> Vec<Color> {
     // Clear accumulators
@@ -337,8 +344,9 @@ fn update_centroids_mini_batch(
     for i in 0..k {
         if buffers.counts[i] == 0 {
             // Replace empty cluster with a random sample
-            if let Some(&s) = samples.choose(rng) {
-                new_centroids.push(s);
+            if !samples.is_empty() {
+                let idx = rng.next_u64() as usize % samples.len();
+                new_centroids.push(samples[idx]);
             } else {
                 new_centroids.push(Color::new(0, 0, 0));
             }

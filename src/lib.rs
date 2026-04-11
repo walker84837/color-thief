@@ -244,6 +244,24 @@ pub fn get_palette(
     }
 }
 
+/// Returns the dominant color of an image.
+///
+/// This is a convenience function that returns the first color from the palette.
+///
+/// * `algorithm` - The algorithm to use for palette generation.
+/// * `pixels` - A raw image data.
+/// * `color_format` - Represent a color format of the image data.
+/// * `quality` - Quality of the output (step size for sampling pixels). Should be between 1 and 10.
+pub fn get_dominant_color(
+    algorithm: Algorithm,
+    pixels: &[u8],
+    color_format: ColorFormat,
+    quality: u8,
+) -> Result<Color, Error> {
+    let palette = get_palette(algorithm, pixels, color_format, quality, 2)?;
+    Ok(palette[0])
+}
+
 trait PaletteGenerator {
     type Error: std::error::Error;
 

@@ -3,8 +3,8 @@ use std::collections::BinaryHeap;
 use std::num::NonZeroU8;
 use thiserror::Error;
 
-const MAX_DEPTH: u8 = 6;
-const QUANTIZE_SHIFT: u8 = 2;
+const MAX_DEPTH: u8 = 8;
+const DEFAULT_DEPTH: u8 = 6;
 
 #[derive(Clone, Debug, Error)]
 #[error("octree error")]
@@ -42,7 +42,7 @@ impl Arena {
         }
     }
 
-    fn alloc(&mut self, _level: u8, parent: Option<usize>) -> usize {
+    fn alloc(&mut self, parent: Option<usize>) -> usize {
         let node = Node {
             parent,
             ..Default::default()
@@ -53,33 +53,29 @@ impl Arena {
 
     #[inline]
     const fn get_child_index(r: u8, g: u8, b: u8, depth: u8) -> u8 {
-        let shift = 5 - depth;
-        let r_bit = ((r >> QUANTIZE_SHIFT) >> shift) & 1;
-        let g_bit = ((g >> QUANTIZE_SHIFT) >> shift) & 1;
-        let b_bit = ((b >> QUANTIZE_SHIFT) >> shift) & 1;
+        let shift = 7 - depth;
+        let r_bit = (r >> shift) & 1;
+        let g_bit = (g >> shift) & 1;
+        let b_bit = (b >> shift) & 1;
         (r_bit << 2) | (g_bit << 1) | b_bit
     }
 
     fn add_color(&mut self, root_idx: usize, r: u8, g: u8, b: u8, depth: u8, max_depth: u8) {
-        let qr = r >> QUANTIZE_SHIFT;
-        let qg = g >> QUANTIZE_SHIFT;
-        let qb = b >> QUANTIZE_SHIFT;
-
         let node = &mut self.nodes[root_idx];
         node.pixel_count += 1;
 
         if depth == max_depth {
             node.is_leaf = true;
-            node.r_sum += qr as u64;
-            node.g_sum += qg as u64;
-            node.b_sum += qb as u64;
+            node.r_sum += r as u64;
+            node.g_sum += g as u64;
+            node.b_sum += b as u64;
             return;
         }
 
-        let index = Self::get_child_index(qr, qg, qb, depth);
+        let index = Self::get_child_index(r, g, b, depth);
 
         if self.nodes[root_idx].children[index as usize].is_none() {
-            let child_idx = self.alloc(depth + 1, Some(root_idx));
+            let child_idx = self.alloc(Some(root_idx));
             self.nodes[root_idx].children[index as usize] = Some(child_idx);
         }
 
@@ -166,11 +162,11 @@ impl PaletteGenerator for Octree {
     ) -> Result<Vec<Color>, Self::Error> {
         let max_depth = self
             .max_depth
-            .map_or(MAX_DEPTH, |d| d.get())
+            .map_or(DEFAULT_DEPTH, |d| d.get())
             .clamp(1, MAX_DEPTH);
 
         let mut arena = Arena::new();
-        let root_idx = arena.alloc(0, None);
+        let root_idx = arena.alloc(None);
 
         let channels = color_format.channels();
         let step = quality as usize;
