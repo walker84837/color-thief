@@ -156,6 +156,9 @@ fn image1_octree() {
     // Verify we get colors and they are valid
     assert!(!colors.is_empty());
     assert!(colors.len() <= 10);
+    // Verify color quality: at least one dark and one sky-like color
+    assert!(colors.iter().any(|c| c.r < 80 && c.g < 70 && c.b < 60)); // Dark colors
+    assert!(colors.iter().any(|c| c.g > 150 && c.b > 150)); // Sky/teal tones
 }
 
 #[test]
@@ -174,4 +177,7 @@ fn image2_octree() {
     // Verify we get colors and they are valid
     assert!(!colors.is_empty());
     assert!(colors.len() <= 10);
+    // Verify key color groups exist
+    assert!(colors.iter().any(|c| c.r > 150 && c.g > 150 && c.b > 150)); // Light gray
+    assert!(colors.iter().any(|c| c.r < 80 && c.g < 70 && c.b < 60)); // Dark brown
 }

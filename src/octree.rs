@@ -107,24 +107,31 @@ impl Arena {
     }
 
     fn merge_node(&mut self, idx: usize) -> usize {
-        let child_indices: Vec<usize> = (0..8)
-            .filter_map(|i| self.nodes[idx].children[i].take())
-            .collect();
+        // Stale heap entry: already merged by a prior pop.
+        if self.nodes[idx].is_leaf {
+            return 0;
+        }
 
-        let child_data: Vec<(u64, u64, u64)> = child_indices
-            .iter()
-            .map(|&c| {
-                let node = self.nodes[c];
-                (node.r_sum, node.g_sum, node.b_sum)
-            })
-            .collect();
+        // Collect up to 8 children into a stack array (avoids heap allocation)
+        let mut children = [None; 8];
+        let mut child_count = 0usize;
+        for i in 0..8 {
+            if let Some(c) = self.nodes[idx].children[i].take() {
+                children[child_count] = Some(c);
+                child_count += 1;
+            }
+        }
 
-        let child_count = child_data.len();
-        let (r_sum, g_sum, b_sum) = child_data
-            .iter()
-            .fold((0u64, 0u64, 0u64), |(r, g, b), (cr, cg, cb)| {
-                (r + cr, g + cg, b + cb)
-            });
+        // Accumulate sums from each child
+        let mut r_sum = 0u64;
+        let mut g_sum = 0u64;
+        let mut b_sum = 0u64;
+        for &c in children.iter().take(child_count).flatten() {
+            let node = &self.nodes[c];
+            r_sum += node.r_sum;
+            g_sum += node.g_sum;
+            b_sum += node.b_sum;
+        }
 
         let node = &mut self.nodes[idx];
         node.r_sum = r_sum;
@@ -144,10 +151,29 @@ impl Arena {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Eq, PartialEq)]
 struct MergeCandidate {
     pixel_count: u64,
     node_idx: usize,
+}
+
+// Min-heap: merge least-populated subtrees first.
+// node_idx tiebreaker (higher = deeper = allocated later) ensures children
+// are always merged before parents, preventing zero-sum reads from unmerged
+// internal children.
+impl Ord for MergeCandidate {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other
+            .pixel_count
+            .cmp(&self.pixel_count)
+            .then_with(|| self.node_idx.cmp(&other.node_idx))
+    }
+}
+
+impl PartialOrd for MergeCandidate {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl PaletteGenerator for Octree {
@@ -219,6 +245,12 @@ impl PaletteGenerator for Octree {
 
         while leaf_count > max_colors as usize {
             if let Some(candidate) = heap.pop() {
+                // Skip stale entries (already merged by a prior pop) to avoid
+                // triggering unnecessary parent repushes up the tree
+                if arena.nodes[candidate.node_idx].is_leaf {
+                    continue;
+                }
+
                 let reduced = arena.merge_node(candidate.node_idx);
                 leaf_count -= reduced;
 

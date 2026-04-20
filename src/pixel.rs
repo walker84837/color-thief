@@ -1,6 +1,6 @@
 use super::ColorFormat;
 
-pub fn color_parts(pixels: &[u8], color_format: ColorFormat, pos: usize) -> (u8, u8, u8, u8) {
+pub const fn color_parts(pixels: &[u8], color_format: ColorFormat, pos: usize) -> (u8, u8, u8, u8) {
     match color_format {
         ColorFormat::Rgb => (pixels[pos], pixels[pos + 1], pixels[pos + 2], 255),
         ColorFormat::Rgba => (

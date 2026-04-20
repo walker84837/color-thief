@@ -100,36 +100,53 @@ fn kmeans(samples: &[Color], k: usize, max_iter: usize, seed: Option<u64>) -> Ve
     // Clamp k to sample count
     let k = k.min(samples.len());
 
-    let mut rng: Box<dyn Rng> = match seed {
-        Some(s) => Box::new(StdRng::seed_from_u64(s)),
-        None => Box::new(rand::rng()),
+    let mut rng = match seed {
+        Some(s) => StdRng::seed_from_u64(s),
+        None => StdRng::seed_from_u64(rand::rng().next_u64()),
     };
 
     let mut centroids = initialize_centroids(samples, k, &mut rng);
     let mut assignments = vec![usize::MAX; samples.len()];
 
+    // Track which samples have been assigned (avoids scanning all samples each iteration)
+    let mut assigned_indices: Vec<usize> = Vec::new();
+
     // Preallocate buffers for update_centroids and reuse each iteration
     let mut buffers = KMeansBuffers::new(k);
 
-    // Dynamic batch size: use smaller batches for better convergence
+    // Batch size scales with dataset: 20% for tiny, 2% for medium, 0.5% for large
+    // Minimum is k (one sample per cluster) so tiny images converge correctly
     let batch_size = match samples.len() {
-        n if n < 100 => n.min(10),
-        n if n < 1000 => (n / 20).clamp(20, 50),
-        n => (n / 50).clamp(50, 200),
+        n if n <= 1000 => n.div_ceil(5).max(k).min(n),
+        n if n <= 100_000 => (n / 50).max(k),
+        n => (n / 200).clamp(k.max(500), 5000),
     };
 
     let mut prev_centroids = Vec::with_capacity(k);
 
     for iter in 0..max_iter {
         // Use mini-batch for faster updates
-        let changed =
-            assign_clusters_mini_batch(samples, &centroids, &mut assignments, batch_size, &mut rng);
+        let changed = assign_clusters_mini_batch(
+            samples,
+            &centroids,
+            &mut assignments,
+            &mut assigned_indices,
+            batch_size,
+            &mut rng,
+        );
         if !changed {
             break;
         }
 
         prev_centroids.clone_from(&centroids);
-        centroids = update_centroids_mini_batch(samples, &assignments, k, &mut rng, &mut buffers);
+        centroids = update_centroids_mini_batch(
+            samples,
+            &assignments,
+            &assigned_indices,
+            k,
+            &mut rng,
+            &mut buffers,
+        );
 
         // Early convergence check: if centroids haven't moved much
         if iter > 0 && centroids_converged(&prev_centroids, &centroids, 2) {
@@ -137,10 +154,31 @@ fn kmeans(samples: &[Color], k: usize, max_iter: usize, seed: Option<u64>) -> Ve
         }
     }
 
+    // Final full assignment: every sample influences centroids by finding nearest
+    assignments
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(idx, dest)| {
+            let (best, _) = find_closest_centroid(&samples[idx], &centroids);
+            *dest = best;
+        });
+
+    assigned_indices.clear();
+    assigned_indices.extend(0..samples.len());
+
+    centroids = update_centroids_mini_batch(
+        samples,
+        &assignments,
+        &assigned_indices,
+        k,
+        &mut rng,
+        &mut buffers,
+    );
+
     centroids
 }
 
-fn initialize_centroids(samples: &[Color], k: usize, rng: &mut dyn Rng) -> Vec<Color> {
+fn initialize_centroids(samples: &[Color], k: usize, rng: &mut StdRng) -> Vec<Color> {
     let k_eff = k.min(samples.len());
 
     // Use k-means++ style initialization for better convergence
@@ -152,42 +190,32 @@ fn initialize_centroids(samples: &[Color], k: usize, rng: &mut dyn Rng) -> Vec<C
         centroids.push(samples[idx]);
     }
 
+    // Reusable distance buffer (avoids reallocation per iteration)
+    let mut distances = Vec::with_capacity(samples.len());
+
     // Choose remaining centroids with probability proportional to distance squared
     while centroids.len() < k_eff {
-        let mut distances = Vec::with_capacity(samples.len());
-        let mut total_distance = 0u64;
-
-        // Calculate minimum distance to existing centroids - parallel for large datasets
-        if samples.len() > 1000 {
-            let (distances_vec, total) = samples
+        // Order-preserving parallel distance computation for large datasets
+        let total_distance = if samples.len() > 1000 {
+            // Ensure buffer has correct length - subsequent iterations reuse without resize
+            if distances.len() != samples.len() {
+                distances.resize(samples.len(), 0);
+            }
+            samples
                 .par_iter()
                 .map(|sample| min_distance_to_centroids(&centroids, sample) as u64)
-                // Parallel fold: accumulate distances and sum totals in each thread
-                .fold(
-                    || (Vec::new(), 0u64),
-                    |(mut dists, total), dist| {
-                        dists.push(dist);
-                        (dists, total + dist)
-                    },
-                )
-                // Parallel reduce: combine results from all threads
-                .reduce(
-                    || (Vec::new(), 0u64),
-                    |(mut dists1, total1), (dists2, total2)| {
-                        dists1.extend(dists2);
-                        (dists1, total1 + total2)
-                    },
-                );
-            distances = distances_vec;
-            total_distance = total;
+                .collect_into_vec(&mut distances);
+            distances.iter().sum()
         } else {
-            // Sequential for small datasets
+            distances.clear();
+            let mut total = 0u64;
             for sample in samples {
                 let min_dist_sq = min_distance_to_centroids(&centroids, sample);
                 distances.push(min_dist_sq as u64);
-                total_distance += min_dist_sq as u64;
+                total += min_dist_sq as u64;
             }
-        }
+            total
+        };
 
         if total_distance == 0 {
             // All points are the same, pick randomly
@@ -231,8 +259,9 @@ fn assign_clusters_mini_batch(
     samples: &[Color],
     centroids: &[Color],
     assignments: &mut [usize],
+    assigned_indices: &mut Vec<usize>,
     batch_size: usize,
-    rng: &mut dyn Rng,
+    rng: &mut StdRng,
 ) -> bool {
     // Randomly select a mini-batch - use pre-allocated indices to reduce allocations
     let mut batch_indices = Vec::with_capacity(batch_size);
@@ -242,32 +271,23 @@ fn assign_clusters_mini_batch(
         batch_indices.push(idx);
     }
 
-    // Use parallelization for larger batches, sequential for smaller ones
-    let new_assignments: Vec<(usize, usize)> = if batch_indices.len() >= 20 {
-        // Parallel version for larger batches
-        batch_indices
-            .par_iter()
-            .map(|&idx| {
-                let sample = &samples[idx];
-                let (best_cluster, _min_dist) = find_closest_centroid(sample, centroids);
-                (idx, best_cluster)
-            })
-            .collect()
-    } else {
-        // Sequential version for smaller batches (avoids parallel overhead)
-        batch_indices
-            .iter()
-            .map(|&idx| {
-                let sample = &samples[idx];
-                let (best_cluster, _min_dist) = find_closest_centroid(sample, centroids);
-                (idx, best_cluster)
-            })
-            .collect()
-    };
+    // Find closest centroid for each sample in the batch
+    let new_assignments: Vec<(usize, usize)> = batch_indices
+        .iter()
+        .map(|&idx| {
+            let sample = &samples[idx];
+            let (best_cluster, _min_dist) = find_closest_centroid(sample, centroids);
+            (idx, best_cluster)
+        })
+        .collect();
 
     let mut changed = false;
     for (idx, best_cluster) in new_assignments {
         if assignments[idx] != best_cluster {
+            // Track first assignment to avoid scanning all samples in the update loop
+            if assignments[idx] == usize::MAX {
+                assigned_indices.push(idx);
+            }
             assignments[idx] = best_cluster;
             changed = true;
         }
@@ -294,50 +314,21 @@ fn find_closest_centroid(sample: &Color, centroids: &[Color]) -> (usize, u32) {
 fn update_centroids_mini_batch(
     samples: &[Color],
     assignments: &[usize],
+    assigned_indices: &[usize],
     k: usize,
-    rng: &mut dyn Rng,
+    rng: &mut StdRng,
     buffers: &mut KMeansBuffers,
 ) -> Vec<Color> {
     // Clear accumulators
     buffers.clear();
 
-    // Parallel accumulation for assigned samples
-    let assigned_samples: Vec<_> = assignments
-        .iter()
-        .enumerate()
-        .filter_map(|(idx, &cluster)| {
-            if cluster != usize::MAX && cluster < k {
-                Some((idx, cluster))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    if assigned_samples.len() > 100 {
-        // Parallel version for larger datasets
-        let results: Vec<_> = assigned_samples
-            .par_iter()
-            .map(|&(idx, cluster)| {
-                let sample = samples[idx];
-                (cluster, sample.r as u64, sample.g as u64, sample.b as u64)
-            })
-            .collect();
-
-        for (cluster, r, g, b) in results {
-            buffers.counts[cluster] += 1;
-            buffers.sums_r[cluster] += r;
-            buffers.sums_g[cluster] += g;
-            buffers.sums_b[cluster] += b;
-        }
-    } else {
-        // Sequential version for smaller datasets
-        for &(idx, cluster) in &assigned_samples {
-            buffers.counts[cluster] += 1;
-            buffers.sums_r[cluster] += samples[idx].r as u64;
-            buffers.sums_g[cluster] += samples[idx].g as u64;
-            buffers.sums_b[cluster] += samples[idx].b as u64;
-        }
+    // Accumulate assigned samples into centroid sums (skips unassigned samples)
+    for &idx in assigned_indices {
+        let cluster = assignments[idx];
+        buffers.counts[cluster] += 1;
+        buffers.sums_r[cluster] += samples[idx].r as u64;
+        buffers.sums_g[cluster] += samples[idx].g as u64;
+        buffers.sums_b[cluster] += samples[idx].b as u64;
     }
 
     let mut new_centroids = Vec::with_capacity(k);

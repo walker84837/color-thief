@@ -1,11 +1,6 @@
-#[macro_use]
-extern crate bencher;
-extern crate color_thief;
-extern crate image;
-
+use criterion::{Criterion, criterion_group, criterion_main};
+use std::hint::black_box;
 use std::path::Path;
-
-use bencher::Bencher;
 
 use color_thief::{Algorithm, ColorFormat};
 
@@ -16,81 +11,115 @@ fn get_image_buffer(img: image::DynamicImage) -> Vec<u8> {
     }
 }
 
-fn q1(bencher: &mut Bencher) {
+fn bench_q1(c: &mut Criterion) {
     let img = image::open(Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
-    bencher.iter(|| color_thief::get_palette(Algorithm::Mmcq, &pixels, ColorFormat::Rgb, 1, 10))
+    c.bench_function("MMCQ/q1", |b| {
+        b.iter(|| {
+            color_thief::get_palette(
+                black_box(Algorithm::Mmcq),
+                black_box(&pixels),
+                black_box(ColorFormat::Rgb),
+                black_box(1),
+                black_box(10),
+            )
+        })
+    });
 }
 
-fn q10(bencher: &mut Bencher) {
+fn bench_q10(c: &mut Criterion) {
     let img = image::open(Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
-    bencher.iter(|| color_thief::get_palette(Algorithm::Mmcq, &pixels, ColorFormat::Rgb, 10, 10))
+    c.bench_function("MMCQ/q10", |b| {
+        b.iter(|| {
+            color_thief::get_palette(
+                black_box(Algorithm::Mmcq),
+                black_box(&pixels),
+                black_box(ColorFormat::Rgb),
+                black_box(10),
+                black_box(10),
+            )
+        })
+    });
 }
 
-fn q1_kmeans(bencher: &mut Bencher) {
+fn bench_q1_kmeans(c: &mut Criterion) {
     let img = image::open(Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
-    bencher.iter(|| {
-        color_thief::get_palette(
-            Algorithm::KMeans {
-                max_iterations: 100,
-                seed: Some(0),
-            },
-            &pixels,
-            ColorFormat::Rgb,
-            1,
-            10,
-        )
-    })
+    c.bench_function("KMeans/q1", |b| {
+        b.iter(|| {
+            color_thief::get_palette(
+                black_box(Algorithm::KMeans {
+                    max_iterations: 100,
+                    seed: Some(0),
+                }),
+                black_box(&pixels),
+                black_box(ColorFormat::Rgb),
+                black_box(1),
+                black_box(10),
+            )
+        })
+    });
 }
 
-fn q10_kmeans(bencher: &mut Bencher) {
+fn bench_q10_kmeans(c: &mut Criterion) {
     let img = image::open(Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
-    bencher.iter(|| {
-        color_thief::get_palette(
-            Algorithm::KMeans {
-                max_iterations: 100,
-                seed: Some(0),
-            },
-            &pixels,
-            ColorFormat::Rgb,
-            10,
-            10,
-        )
-    })
+    c.bench_function("KMeans/q10", |b| {
+        b.iter(|| {
+            color_thief::get_palette(
+                black_box(Algorithm::KMeans {
+                    max_iterations: 100,
+                    seed: Some(0),
+                }),
+                black_box(&pixels),
+                black_box(ColorFormat::Rgb),
+                black_box(10),
+                black_box(10),
+            )
+        })
+    });
 }
 
-fn q1_octree(bencher: &mut Bencher) {
+fn bench_q1_octree(c: &mut Criterion) {
     let img = image::open(Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
-    bencher.iter(|| {
-        color_thief::get_palette(
-            Algorithm::Octree { max_depth: None },
-            &pixels,
-            ColorFormat::Rgb,
-            1,
-            10,
-        )
-    })
+    c.bench_function("Octree/q1", |b| {
+        b.iter(|| {
+            color_thief::get_palette(
+                black_box(Algorithm::Octree { max_depth: None }),
+                black_box(&pixels),
+                black_box(ColorFormat::Rgb),
+                black_box(1),
+                black_box(10),
+            )
+        })
+    });
 }
 
-fn q10_octree(bencher: &mut Bencher) {
+fn bench_q10_octree(c: &mut Criterion) {
     let img = image::open(Path::new("images/photo1.jpg")).unwrap();
     let pixels = get_image_buffer(img);
-    bencher.iter(|| {
-        color_thief::get_palette(
-            Algorithm::Octree { max_depth: None },
-            &pixels,
-            ColorFormat::Rgb,
-            10,
-            10,
-        )
-    })
+    c.bench_function("Octree/q10", |b| {
+        b.iter(|| {
+            color_thief::get_palette(
+                black_box(Algorithm::Octree { max_depth: None }),
+                black_box(&pixels),
+                black_box(ColorFormat::Rgb),
+                black_box(10),
+                black_box(10),
+            )
+        })
+    });
 }
 
-benchmark_group!(
-    benches, q1, q10, q1_kmeans, q10_kmeans, q1_octree, q10_octree
+criterion_group!(
+    benches,
+    bench_q1,
+    bench_q10,
+    bench_q1_kmeans,
+    bench_q10_kmeans,
+    bench_q1_octree,
+    bench_q10_octree
 );
-benchmark_main!(benches);
+criterion_main!(benches);

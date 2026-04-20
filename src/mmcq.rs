@@ -174,7 +174,7 @@ fn make_histogram_and_vbox(pixels: &[u8], color_format: ColorFormat, step: u8) -
             break;
         }
         let (r, g, b, a) = pixel::color_parts(pixels, color_format, i);
-        if a < 125 || (r > 250 && g > 250 && b > 250) {
+        if pixel::should_skip_pixel(r, g, b, a) {
             continue;
         }
 
