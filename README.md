@@ -60,12 +60,23 @@ The `get_palette` function signature has changed to include an `algorithm` param
 
 **Old signature**:
 ```rust
-pub fn get_palette(pixels: &[u8], color_format: ColorFormat, quality: u8, max_colors: u8) -> Result<Vec<Color>, Error>
+pub fn get_palette(
+    pixels: &[u8],
+    color_format: ColorFormat,
+    quality: u8,
+    max_colors: u8
+) -> Result<Vec<Color>, Error>
 ```
 
 **New signature**:
 ```rust
-pub fn get_palette(algorithm: Algorithm, pixels: &[u8], color_format: ColorFormat, quality: u8, max_colors: u8) -> Result<Vec<Color>, Error>
+pub fn get_palette(
+    algorithm: Algorithm, <-- NEW parameter
+    pixels: &[u8],
+    color_format: ColorFormat,
+    quality: u8,
+    max_colors: u8
+) -> Result<Vec<Color>, Error>
 ```
 
 To migrate, you must now specify the algorithm to use. For the original behavior, use `Algorithm::Mmcq`.
