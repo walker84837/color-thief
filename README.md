@@ -71,7 +71,7 @@ pub fn get_palette(
 **New signature**:
 ```rust
 pub fn get_palette(
-    algorithm: Algorithm, <-- NEW parameter
+    algorithm: Algorithm, // <-- NEW parameter
     pixels: &[u8],
     color_format: ColorFormat,
     quality: u8,
