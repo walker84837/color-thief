@@ -1,10 +1,10 @@
-# color-thief-rs
+# color-thief-ng
 
 A Rust implementation of the color-thief algorithm, forked from the archived [RazrFalcon/color-thief-rs](https://github.com/RazrFalcon/color-thief-rs) repository. This fork aims to carry the project forward by adding new algorithms, fixing bugs, and maintaining the library.
 
 ## Overview
 
-*color-thief-rs* is a [color-thief](https://github.com/lokesh/color-thief) algorithm reimplementation in Rust.
+*color-thief-ng* is a [color-thief](https://github.com/lokesh/color-thief) algorithm reimplementation in Rust.
 
 ## Table of Contents
 
@@ -41,7 +41,7 @@ test q10 ... bench:     854,297 ns/iter (+/- 25,468)
 
 ### Algorithm Selection
 
-`color-thief-rs` provides several algorithms for color quantization:
+`color-thief-ng` provides several algorithms for color quantization:
 
 - **MMCQ (Modified Median Cut Quantization)**: The original algorithm used in color-thief. It's fast and effective for most images.
 - **K-Means**: An iterative algorithm that groups similar colors. It's more accurate for images with subtle gradients but slower. We use K-Means++ for initialization and mini-batching for performance.
@@ -94,19 +94,19 @@ To migrate, you must now specify the algorithm to use. For the original behavior
 If you were previously calling `get_palette` like this:
 
 ```rust
-let colors = color_thief::get_palette(&buffer, color_type, 10, 10).unwrap();
+let colors = color_thief_ng::get_palette(&buffer, color_type, 10, 10).unwrap();
 ```
 
 You should update it to explicitly use an algorithm:
 
 ```rust
-use color_thief::Algorithm;
+use color_thief_ng::Algorithm;
 
 // For the original behavior (MMCQ)
-let colors_mmcq = color_thief::get_palette(Algorithm::Mmcq, &buffer, color_type, 10, 10).unwrap();
+let colors_mmcq = color_thief_ng::get_palette(Algorithm::Mmcq, &buffer, color_type, 10, 10).unwrap();
 
 // For the new K-Means algorithm with a seed
-let colors_kmeans = color_thief::get_palette(
+let colors_kmeans = color_thief_ng::get_palette(
     Algorithm::KMeans {
         max_iterations: 100,
         seed: Some(42),
@@ -119,7 +119,7 @@ let colors_kmeans = color_thief::get_palette(
 .unwrap();
 
 // For the new Octree algorithm
-let colors_octree = color_thief::get_palette(
+let colors_octree = color_thief_ng::get_palette(
     Algorithm::Octree { max_depth: None },
     &buffer,
     color_type,
@@ -137,4 +137,4 @@ let colors_octree = color_thief::get_palette(
 
 ### License
 
-*color-thief-rs* is licensed under the MIT.
+*color-thief-ng* is licensed under the MIT.

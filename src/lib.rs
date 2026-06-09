@@ -2,11 +2,11 @@
 // See the COPYRIGHT file at the top-level directory of this distribution.
 // Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
 
-//! *color-thief-rs* is a [color-thief](https://github.com/lokesh/color-thief)
+//! *color-thief-ng* is a [color-thief](https://github.com/lokesh/color-thief)
 //! algorithm reimplementation in Rust.
 //!
-//! The implementation is a fork of the original [color-thief-rs](https://github.com/RazrFalcon/color-thief-rs)
-//! which adds a few algorithms.
+//! This library was forked from [color-thief-rs](https://github.com/RazrFalcon/color-thief-rs)
+//! and extended with additional algorithms.
 //!
 //! This fork improves on the library's algorithms (MMCQ is the original algorithm used), including:
 //! - Ability to choose another algorithm for color palette generation.
@@ -45,7 +45,7 @@ const MMCQ_ITERATION_LIMIT: i32 = 1000;
 /// Choice of algorithm for color palette generation.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum Algorithm {
-    /// Original MMCQ (Modified Median Cut Quantization) algorithm. This algorithm was used in the original code of `color-thief-rs`.
+    /// Original MMCQ (Modified Median Cut Quantization) algorithm. This algorithm was used in the original code of `color-thief`.
     ///
     /// *Summary*: Fast, distinct colors, less accurate.
     ///

@@ -1,6 +1,6 @@
-extern crate color_thief;
+extern crate color_thief_ng;
 
-use color_thief::{Algorithm, Color, ColorFormat};
+use color_thief_ng::{Algorithm, Color, ColorFormat};
 
 #[test]
 fn synthetic_image_precision() {
@@ -16,7 +16,7 @@ fn synthetic_image_precision() {
 
     // Test MMCQ
     let colors_mmcq =
-        color_thief::get_palette(Algorithm::Mmcq, &pixels, color_format, 1, 4).unwrap();
+        color_thief_ng::get_palette(Algorithm::Mmcq, &pixels, color_format, 1, 4).unwrap();
     // MMCQ should find these colors, though they might be shifted slightly due to SIGNAL_BITS (5 bits)
     // 255 -> 11111000 in binary (if using 5 bits), which is 248.
     // The current implementation shifts by 3 bits.
@@ -28,7 +28,7 @@ fn synthetic_image_precision() {
     assert_eq!(colors_mmcq.len(), 4);
 
     // Test KMeans
-    let colors_kmeans = color_thief::get_palette(
+    let colors_kmeans = color_thief_ng::get_palette(
         Algorithm::KMeans {
             max_iterations: 100,
             seed: Some(0),

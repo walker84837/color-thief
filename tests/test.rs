@@ -1,7 +1,7 @@
-extern crate color_thief;
+extern crate color_thief_ng;
 extern crate image;
 
-use color_thief::{Algorithm, Color, ColorFormat};
+use color_thief_ng::{Algorithm, Color, ColorFormat};
 use std::path;
 
 fn get_image_buffer(img: image::DynamicImage) -> (Vec<u8>, ColorFormat) {
@@ -42,7 +42,7 @@ fn kmeans_determinism() {
     let (buffer, color_type) = get_image_buffer(img);
 
     let seed = Some(42);
-    let colors1 = color_thief::get_palette(
+    let colors1 = color_thief_ng::get_palette(
         Algorithm::KMeans {
             max_iterations: 10,
             seed,
@@ -54,7 +54,7 @@ fn kmeans_determinism() {
     )
     .unwrap();
 
-    let colors2 = color_thief::get_palette(
+    let colors2 = color_thief_ng::get_palette(
         Algorithm::KMeans {
             max_iterations: 10,
             seed,
@@ -73,7 +73,7 @@ fn kmeans_determinism() {
 fn image1_mmcq() {
     let img = image::open(path::Path::new("images/photo1.jpg")).unwrap();
     let (buffer, color_type) = get_image_buffer(img);
-    let colors = color_thief::get_palette(Algorithm::Mmcq, &buffer, color_type, 10, 10).unwrap();
+    let colors = color_thief_ng::get_palette(Algorithm::Mmcq, &buffer, color_type, 10, 10).unwrap();
 
     println!("{:?}", colors);
 
@@ -88,7 +88,7 @@ fn image1_mmcq() {
 fn image1_kmeans() {
     let img = image::open(path::Path::new("images/photo1.jpg")).unwrap();
     let (buffer, color_type) = get_image_buffer(img);
-    let colors = color_thief::get_palette(
+    let colors = color_thief_ng::get_palette(
         Algorithm::KMeans {
             max_iterations: 100,
             seed: Some(0),
@@ -110,7 +110,7 @@ fn image1_kmeans() {
 fn image2_mmcq() {
     let img = image::open(path::Path::new("images/iguana.png")).unwrap();
     let (buffer, color_type) = get_image_buffer(img);
-    let colors = color_thief::get_palette(Algorithm::Mmcq, &buffer, color_type, 10, 10).unwrap();
+    let colors = color_thief_ng::get_palette(Algorithm::Mmcq, &buffer, color_type, 10, 10).unwrap();
 
     // Verify we have expected color groups
     assert!(colors.iter().any(|c| c.r > 200 && c.g > 200 && c.b > 200)); // White/gray
@@ -122,7 +122,7 @@ fn image2_mmcq() {
 fn image2_kmeans() {
     let img = image::open(path::Path::new("images/iguana.png")).unwrap();
     let (buffer, color_type) = get_image_buffer(img);
-    let colors = color_thief::get_palette(
+    let colors = color_thief_ng::get_palette(
         Algorithm::KMeans {
             max_iterations: 100,
             seed: Some(0),
@@ -144,7 +144,7 @@ fn image2_kmeans() {
 fn image1_octree() {
     let img = image::open(path::Path::new("images/photo1.jpg")).unwrap();
     let (buffer, color_type) = get_image_buffer(img);
-    let colors = color_thief::get_palette(
+    let colors = color_thief_ng::get_palette(
         Algorithm::Octree { max_depth: None },
         &buffer,
         color_type,
@@ -165,7 +165,7 @@ fn image1_octree() {
 fn image2_octree() {
     let img = image::open(path::Path::new("images/iguana.png")).unwrap();
     let (buffer, color_type) = get_image_buffer(img);
-    let colors = color_thief::get_palette(
+    let colors = color_thief_ng::get_palette(
         Algorithm::Octree { max_depth: None },
         &buffer,
         color_type,
